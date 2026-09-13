@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111111" />
+  <title>Luria Voice Test</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="page">
+    <section class="phone-wrap" aria-label="Luria mobile prototype">
+      <div class="phone">
+        <canvas id="rive-canvas" width="390" height="746" aria-label="Luria Rive animation"></canvas>
+        <img class="shell-overlay" src="./assets/shell-overlay.png" alt="" />
+        <div id="loading" class="loading">Loading Luria…</div>
+      </div>
+    </section>
+
+    <section class="tester">
+      <div class="tester-heading">
+        <div>
+          <h1>Luria voice test</h1>
+          <p>Microphone amplitude → <code>voiceLevel</code> 0–3 → Rive</p>
+        </div>
+        <span id="rive-status" class="badge">Waiting for Rive</span>
+      </div>
+
+      <div class="meter-card">
+        <div class="meter-row">
+          <span>voiceLevel</span>
+          <strong id="voice-value">0.00</strong>
+        </div>
+        <div class="meter">
+          <div id="voice-meter" class="meter-fill"></div>
+        </div>
+        <div class="meter-labels"><span>0</span><span>1</span><span>2</span><span>3</span></div>
+      </div>
+
+      <div class="actions">
+        <button id="mic-button" class="primary">Enable microphone</button>
+        <button id="stop-button" disabled>Stop microphone</button>
+      </div>
+
+      <label class="control">
+        <span>Manual voiceLevel <output id="manual-output">0.00</output></span>
+        <input id="manual-level" type="range" min="0" max="3" value="0" step="0.01" />
+      </label>
+
+      <div class="grid">
+        <label class="control">
+          <span>Sensitivity <output id="sensitivity-output">1.00×</output></span>
+          <input id="sensitivity" type="range" min="0.4" max="3" value="1" step="0.05" />
+        </label>
+
+        <label class="control">
+          <span>Noise gate <output id="gate-output">0.015</output></span>
+          <input id="noise-gate" type="range" min="0" max="0.08" value="0.015" step="0.001" />
+        </label>
+
+        <label class="control">
+          <span>Attack <output id="attack-output">0.28</output></span>
+          <input id="attack" type="range" min="0.04" max="0.65" value="0.28" step="0.01" />
+        </label>
+
+        <label class="control">
+          <span>Release <output id="release-output">0.09</output></span>
+          <input id="release" type="range" min="0.02" max="0.35" value="0.09" step="0.01" />
+        </label>
+      </div>
+
+      <details>
+        <summary>Diagnostics</summary>
+        <pre id="diagnostics">Waiting for Rive…</pre>
+      </details>
+
+      <p class="hint">
+        Put your exported file at <code>assets/luria.riv</code>. Microphone access requires HTTPS
+        (GitHub Pages is fine) or localhost.
+      </p>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/@rive-app/webgl2@latest"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

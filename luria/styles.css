@@ -1,0 +1,178 @@
+* { box-sizing: border-box; }
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f4f4f5;
+  background: #111113;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(124, 104, 180, .14), transparent 38rem),
+    #111113;
+}
+button, input { font: inherit; }
+.page {
+  width: min(1050px, 100%);
+  margin: 0 auto;
+  padding: 28px 18px 50px;
+  display: grid;
+  grid-template-columns: minmax(280px, 390px) minmax(300px, 1fr);
+  gap: 34px;
+  align-items: start;
+}
+.phone-wrap {
+  position: sticky;
+  top: 20px;
+}
+.phone {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 390 / 844;
+  overflow: hidden;
+  background: #000;
+  border-radius: 28px;
+  box-shadow: 0 22px 70px rgba(0,0,0,.44);
+}
+#rive-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: calc(100% * 746 / 844);
+  display: block;
+}
+.shell-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+.loading {
+  position: absolute;
+  inset: 0 0 calc(100% * 98 / 844) 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255,255,255,.58);
+  font-size: 13px;
+  pointer-events: none;
+}
+.loading.hidden { display: none; }
+
+.tester {
+  background: rgba(28,28,31,.92);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.24);
+}
+.tester-heading {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+h1 { margin: 0 0 5px; font-size: 22px; }
+p { color: #a7a7ad; line-height: 1.45; }
+.tester-heading p { margin: 0; font-size: 14px; }
+code {
+  color: #ddd7ff;
+  background: rgba(139,119,210,.13);
+  padding: .12em .35em;
+  border-radius: 5px;
+}
+.badge {
+  flex: none;
+  font-size: 12px;
+  padding: 7px 9px;
+  border-radius: 99px;
+  background: #34343a;
+  color: #b9b9c0;
+}
+.badge.ok { background: rgba(76,175,80,.15); color: #b9e8bb; }
+.badge.error { background: rgba(239,83,80,.14); color: #ffb8b6; }
+
+.meter-card {
+  margin-top: 24px;
+  background: #151518;
+  border: 1px solid rgba(255,255,255,.07);
+  padding: 16px;
+  border-radius: 16px;
+}
+.meter-row { display: flex; justify-content: space-between; align-items: baseline; }
+.meter-row strong { font-size: 28px; font-variant-numeric: tabular-nums; }
+.meter {
+  height: 10px;
+  margin-top: 10px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: #2a2a30;
+}
+.meter-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #d8ccff, #fff3cf);
+  transition: width 60ms linear;
+}
+.meter-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  color: #707078;
+  font-size: 11px;
+}
+.actions { display: flex; gap: 10px; margin-top: 18px; }
+button {
+  border: 1px solid rgba(255,255,255,.11);
+  background: #303036;
+  color: white;
+  border-radius: 11px;
+  padding: 11px 14px;
+  cursor: pointer;
+}
+button.primary { background: #7766bd; border-color: transparent; }
+button:disabled { opacity: .4; cursor: default; }
+
+.control {
+  display: block;
+  margin-top: 20px;
+}
+.control > span {
+  display: flex;
+  justify-content: space-between;
+  color: #d8d8dc;
+  font-size: 13px;
+}
+.control output { color: #9898a2; font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; margin-top: 8px; accent-color: #9e8de0; }
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+}
+details {
+  margin-top: 22px;
+  border-top: 1px solid rgba(255,255,255,.08);
+  padding-top: 16px;
+}
+summary { color: #c9c9cf; cursor: pointer; }
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  color: #9797a0;
+  background: #121214;
+  border-radius: 12px;
+  padding: 12px;
+  max-height: 220px;
+  overflow: auto;
+}
+.hint { margin: 18px 0 0; font-size: 12px; }
+
+@media (max-width: 780px) {
+  .page { grid-template-columns: 1fr; max-width: 430px; }
+  .phone-wrap { position: static; }
+  .tester { padding: 17px; }
+}
