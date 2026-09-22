@@ -232,7 +232,8 @@ function loadRive() {
   const params = {
     src: RIVE_FILE,
     canvas,
-    artboard: "Final",
+    //artboard: "Final",
+    stateMachines: STATE_MACHINE,
     autoplay: true,
     autoBind: true,
     useOffscreenRenderer: false,
