@@ -232,7 +232,8 @@ function loadRive() {
   const params = {
     src: RIVE_FILE,
     canvas,
-    stateMachines: STATE_MACHINE,
+    artboard: "Final",
+    stateMachines: "Luria State Machine",
     autoplay: true,
     autoBind: true,
     useOffscreenRenderer: false,
