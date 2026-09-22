@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111113" />
+  <title>Luria State Test</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="page">
+    <section class="phone-wrap" aria-label="Luria mobile prototype">
+      <div class="phone">
+        <canvas id="rive-canvas" width="390" height="746" aria-label="Luria Rive animation"></canvas>
+        <img class="shell-overlay" src="./assets/shell-overlay.svg" alt="" />
+
+        <div id="loading" class="loading" aria-live="polite">
+          <div class="loader-ring" aria-hidden="true"></div>
+          <div class="loading-copy">
+            <strong>Loading Luria</strong>
+            <span>Preparing animation…</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tester">
+      <header class="tester-header">
+        <div>
+          <h1>Luria test</h1>
+          <p>State + voice response</p>
+        </div>
+        <span id="rive-status" class="status-dot" title="Waiting for Rive"></span>
+      </header>
+
+      <div class="mode-switch" role="group" aria-label="Luria mode">
+        <button class="mode-button active" data-mode="Listening">User speaking</button>
+        <button class="mode-button" data-mode="Thinking">Thinking</button>
+        <button class="mode-button" data-mode="Speaking">Luria speaking</button>
+      </div>
+
+      <section id="user-panel" class="voice-panel">
+        <div class="panel-row">
+          <span>User voice</span>
+          <output id="user-output">0.00</output>
+        </div>
+        <input id="user-level" type="range" min="0" max="3" step="0.01" value="0" />
+        <button id="user-mic" class="mic-button">Use microphone</button>
+      </section>
+
+      <section id="thinking-panel" class="thinking-panel hidden">
+        <span class="thinking-dot"></span>
+        <span>Thinking state</span>
+      </section>
+
+      <section id="luria-panel" class="voice-panel hidden">
+        <div class="panel-row">
+          <span>Luria voice</span>
+          <output id="luria-output">0.00</output>
+        </div>
+        <input id="luria-level" type="range" min="0" max="3" step="0.01" value="0" />
+        <button id="luria-mic" class="mic-button">Use microphone</button>
+      </section>
+
+      <p id="mic-status" class="microcopy">Microphone is off.</p>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/@rive-app/webgl2@2.42.2"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
