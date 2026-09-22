@@ -1,523 +1,1385 @@
-// Luria compact state + voice test harness
-// BUILD: LURIA-WEB-STATES-v1
-//
-// Expected Rive setup:
-// - assets/luria.riv
-// - State Machine: "Luria State Machine"
-// - Default View Model / Default Instance bound to the artboard
-// - Enum:   state = Idle | Listening | Thinking | Speaking
-// - Number: userVoiceLevel  = 0..3
-// - Number: luriaVoiceLevel = 0..3
-//
-// The tester intentionally surfaces only 3 modes:
-// - User speaking  -> Rive state "Listening"
-// - Thinking       -> Rive state "Thinking"
-// - Luria speaking -> Rive state "Speaking"
+// ------------------------------------------------------------
+// LURIA WEB DEMO
+// Final artboard + GPUCanvas / WGSL
+// ------------------------------------------------------------
 
-const BUILD_ID = "LURIA-WEB-STATES-v1";
-const RIVE_FILE = "./assets/luria.riv";
-const STATE_MACHINE = "Luria State Machine";
+const BUILD_ID = "LURIA-GPU-v6";
 
-const STATE_PROPERTY = "state";
-const USER_VOICE_PROPERTY = "userVoiceLevel";
-const LURIA_VOICE_PROPERTY = "luriaVoiceLevel";
+const RIVE_FILE =
+  "./assets/luria.riv?v=20260922-6";
 
-const canvas = document.getElementById("rive-canvas");
-const loading = document.getElementById("loading");
-const riveStatus = document.getElementById("rive-status");
+const ARTBOARD =
+  "Final";
 
-const modeButtons = [...document.querySelectorAll(".mode-button")];
+const STATE_MACHINE =
+  "Luria State Machine";
 
-const userPanel = document.getElementById("user-panel");
-const thinkingPanel = document.getElementById("thinking-panel");
-const luriaPanel = document.getElementById("luria-panel");
 
-const userSlider = document.getElementById("user-level");
-const userOutput = document.getElementById("user-output");
-const luriaSlider = document.getElementById("luria-level");
-const luriaOutput = document.getElementById("luria-output");
+// ------------------------------------------------------------
+// VIEW MODEL PROPERTY NAMES
+// ------------------------------------------------------------
 
-const userMicButton = document.getElementById("user-mic");
-const luriaMicButton = document.getElementById("luria-mic");
-const micStatus = document.getElementById("mic-status");
+const STATE_PROPERTY =
+  "state";
+
+const USER_VOICE_PROPERTY =
+  "userVoiceLevel";
+
+const LURIA_VOICE_PROPERTY =
+  "luriaVoiceLevel";
+
+
+// ------------------------------------------------------------
+// DOM
+// ------------------------------------------------------------
+
+const canvas =
+  document.getElementById("rive-canvas");
+
+const loading =
+  document.getElementById("loading");
+
+const riveStatus =
+  document.getElementById("rive-status");
+
+
+const modeButtons =
+  [...document.querySelectorAll(".mode-button")];
+
+
+const userPanel =
+  document.getElementById("user-panel");
+
+const thinkingPanel =
+  document.getElementById("thinking-panel");
+
+const luriaPanel =
+  document.getElementById("luria-panel");
+
+
+const userSlider =
+  document.getElementById("user-level");
+
+const userOutput =
+  document.getElementById("user-output");
+
+
+const luriaSlider =
+  document.getElementById("luria-level");
+
+const luriaOutput =
+  document.getElementById("luria-output");
+
+
+const userMicButton =
+  document.getElementById("user-mic");
+
+const luriaMicButton =
+  document.getElementById("luria-mic");
+
+const micStatus =
+  document.getElementById("mic-status");
+
+
+// ------------------------------------------------------------
+// RIVE
+// ------------------------------------------------------------
 
 let r = null;
+
 let stateProp = null;
 let userVoiceProp = null;
 let luriaVoiceProp = null;
 
-let currentMode = "Listening";
 
-let mediaStream = null;
-let audioContext = null;
-let analyser = null;
-let timeData = null;
-let micRAF = null;
-let micTarget = null; // "user" | "luria" | null
-let smoothedMicLevel = 0;
-let renderingWatchdog = null;
+// ------------------------------------------------------------
+// CURRENT MODE
+// ------------------------------------------------------------
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
+let currentMode =
+  "Listening";
+
+
+// ------------------------------------------------------------
+// CONTINUOUS GPU RENDER LOOP
+// ------------------------------------------------------------
+//
+// Important for GPUCanvas / procedural shader content.
+//
+// We intentionally keep asking Rive to render while the
+// page is visible.
+//
+// This prevents the high-level runtime from going idle when
+// Final's authored state appears "unchanged" even though
+// the Node Script / shader has time-based movement.
+// ------------------------------------------------------------
+
+let continuousRenderRAF = null;
+
+
+function startContinuousRiveRendering() {
+
+  stopContinuousRiveRendering();
+
+
+  const tick = () => {
+
+    if (
+      r &&
+      document.visibilityState === "visible"
+    ) {
+
+      try {
+
+        r.startRendering();
+
+      } catch (_) {
+
+        // Ignore transient startup frames.
+      }
+    }
+
+
+    continuousRenderRAF =
+      requestAnimationFrame(
+        tick
+      );
+  };
+
+
+  continuousRenderRAF =
+    requestAnimationFrame(
+      tick
+    );
 }
 
-function setRiveStatus(type, title) {
-  if (!riveStatus) return;
-  riveStatus.className = `status-dot ${type || ""}`.trim();
-  riveStatus.title = title;
+
+function stopContinuousRiveRendering() {
+
+  if (continuousRenderRAF !== null) {
+
+    cancelAnimationFrame(
+      continuousRenderRAF
+    );
+
+    continuousRenderRAF = null;
+  }
 }
 
-function keepRiveAwake() {
-  if (!r) return;
+
+// ------------------------------------------------------------
+// HELPERS
+// ------------------------------------------------------------
+
+function clamp(
+  value,
+  min,
+  max
+) {
+
+  return Math.max(
+    min,
+    Math.min(
+      max,
+      value
+    )
+  );
+}
+
+
+function setRiveStatus(
+  type,
+  title
+) {
+
+  if (!riveStatus) {
+    return;
+  }
+
+
+  riveStatus.className =
+    `status-dot ${type || ""}`.trim();
+
+
+  riveStatus.title =
+    title;
+}
+
+
+function wakeRive() {
+
+  if (!r) {
+    return;
+  }
+
+
   try {
+
     r.startRendering();
+
   } catch (err) {
-    console.warn("[Luria] startRendering:", err);
+
+    console.warn(
+      "[Luria] startRendering:",
+      err
+    );
   }
 }
 
-function updateUserVoice(value, fromMic = false) {
-  const v = clamp(Number(value) || 0, 0, 3);
 
-  if (userOutput) userOutput.textContent = v.toFixed(2);
+// ------------------------------------------------------------
+// USER VOICE
+// ------------------------------------------------------------
 
-  if (fromMic && userSlider) {
-    userSlider.value = v.toFixed(2);
+function updateUserVoice(
+  value,
+  fromMic = false
+) {
+
+  const v =
+    clamp(
+      Number(value) || 0,
+      0,
+      3
+    );
+
+
+  if (userOutput) {
+
+    userOutput.textContent =
+      v.toFixed(2);
   }
+
+
+  if (
+    fromMic &&
+    userSlider
+  ) {
+
+    userSlider.value =
+      v.toFixed(2);
+  }
+
 
   if (userVoiceProp) {
-    userVoiceProp.value = v;
-    keepRiveAwake();
+
+    userVoiceProp.value =
+      v;
+
+    wakeRive();
   }
 }
 
-function updateLuriaVoice(value, fromMic = false) {
-  const v = clamp(Number(value) || 0, 0, 3);
 
-  if (luriaOutput) luriaOutput.textContent = v.toFixed(2);
+// ------------------------------------------------------------
+// LURIA VOICE
+// ------------------------------------------------------------
 
-  if (fromMic && luriaSlider) {
-    luriaSlider.value = v.toFixed(2);
+function updateLuriaVoice(
+  value,
+  fromMic = false
+) {
+
+  const v =
+    clamp(
+      Number(value) || 0,
+      0,
+      3
+    );
+
+
+  if (luriaOutput) {
+
+    luriaOutput.textContent =
+      v.toFixed(2);
   }
+
+
+  if (
+    fromMic &&
+    luriaSlider
+  ) {
+
+    luriaSlider.value =
+      v.toFixed(2);
+  }
+
 
   if (luriaVoiceProp) {
-    luriaVoiceProp.value = v;
-    keepRiveAwake();
+
+    luriaVoiceProp.value =
+      v;
+
+    wakeRive();
   }
 }
 
-function setState(value) {
-  if (!stateProp) return;
+
+// ------------------------------------------------------------
+// STATE
+// ------------------------------------------------------------
+
+function setState(
+  value
+) {
+
+  if (!stateProp) {
+    return;
+  }
+
 
   try {
-    stateProp.value = value;
-    keepRiveAwake();
+
+    stateProp.value =
+      value;
+
+    wakeRive();
+
   } catch (err) {
-    console.error(`[Luria] Could not set state="${value}"`, err);
-    setRiveStatus("error", `Could not set Rive state: ${value}`);
+
+    console.error(
+      `[Luria] Could not set state="${value}"`,
+      err
+    );
+
+
+    setRiveStatus(
+      "error",
+      `Could not set Rive state: ${value}`
+    );
   }
 }
 
-async function setMode(mode) {
-  if (!["Listening", "Thinking", "Speaking"].includes(mode)) return;
 
-  // A microphone session is tied to one voice property.
-  // Stop it when changing mode so it can never drive the wrong signal.
+// ------------------------------------------------------------
+// MODE
+// ------------------------------------------------------------
+
+async function setMode(
+  mode
+) {
+
+  if (
+    ![
+      "Listening",
+      "Thinking",
+      "Speaking"
+    ].includes(mode)
+  ) {
+
+    return;
+  }
+
+
   if (micTarget) {
+
     await stopMicrophone();
   }
 
-  currentMode = mode;
 
-  modeButtons.forEach((button) => {
-    button.classList.toggle("active", button.dataset.mode === mode);
-  });
+  currentMode =
+    mode;
 
-  userPanel?.classList.toggle("hidden", mode !== "Listening");
-  thinkingPanel?.classList.toggle("hidden", mode !== "Thinking");
-  luriaPanel?.classList.toggle("hidden", mode !== "Speaking");
 
-  // Prevent stale voice values from leaking into other visual states.
+  modeButtons.forEach(
+    (button) => {
+
+      button.classList.toggle(
+        "active",
+        button.dataset.mode === mode
+      );
+    }
+  );
+
+
+  userPanel?.classList.toggle(
+    "hidden",
+    mode !== "Listening"
+  );
+
+
+  thinkingPanel?.classList.toggle(
+    "hidden",
+    mode !== "Thinking"
+  );
+
+
+  luriaPanel?.classList.toggle(
+    "hidden",
+    mode !== "Speaking"
+  );
+
+
+  // Clear irrelevant voice signal.
+
   if (mode === "Listening") {
+
     updateLuriaVoice(0);
+
   } else if (mode === "Thinking") {
+
     updateUserVoice(0);
     updateLuriaVoice(0);
+
   } else if (mode === "Speaking") {
+
     updateUserVoice(0);
   }
 
-  setState(mode);
+
+  setState(
+    mode
+  );
 }
 
+
+// ------------------------------------------------------------
+// VIEW MODEL
+// ------------------------------------------------------------
+
 function bindViewModel() {
-  const vmi = r?.viewModelInstance;
+
+  const vmi =
+    r?.viewModelInstance;
+
 
   if (!vmi) {
-    setRiveStatus("error", "No bound View Model instance");
-    console.error(
-      "[Luria] No auto-bound View Model Instance. " +
-      "Assign the Luria View Model to the artboard and mark an instance as Default."
+
+    setRiveStatus(
+      "error",
+      "No bound View Model instance"
     );
+
+
+    console.error(
+      "[Luria] No auto-bound View Model instance."
+    );
+
+
     return false;
   }
 
-  try {
-    stateProp = vmi.enum(STATE_PROPERTY);
-  } catch (err) {
-    console.error(`[Luria] Enum "${STATE_PROPERTY}" unavailable`, err);
-  }
 
   try {
-    userVoiceProp = vmi.number(USER_VOICE_PROPERTY);
+
+    stateProp =
+      vmi.enum(
+        STATE_PROPERTY
+      );
+
   } catch (err) {
-    console.error(`[Luria] Number "${USER_VOICE_PROPERTY}" unavailable`, err);
+
+    console.error(
+      `[Luria] Enum "${STATE_PROPERTY}" unavailable`,
+      err
+    );
   }
+
 
   try {
-    luriaVoiceProp = vmi.number(LURIA_VOICE_PROPERTY);
+
+    userVoiceProp =
+      vmi.number(
+        USER_VOICE_PROPERTY
+      );
+
   } catch (err) {
-    console.error(`[Luria] Number "${LURIA_VOICE_PROPERTY}" unavailable`, err);
+
+    console.error(
+      `[Luria] Number "${USER_VOICE_PROPERTY}" unavailable`,
+      err
+    );
   }
 
-  if (!stateProp || !userVoiceProp || !luriaVoiceProp) {
-    setRiveStatus("error", "One or more View Model properties are missing");
+
+  try {
+
+    luriaVoiceProp =
+      vmi.number(
+        LURIA_VOICE_PROPERTY
+      );
+
+  } catch (err) {
+
+    console.error(
+      `[Luria] Number "${LURIA_VOICE_PROPERTY}" unavailable`,
+      err
+    );
+  }
+
+
+  if (
+    !stateProp ||
+    !userVoiceProp ||
+    !luriaVoiceProp
+  ) {
+
+    setRiveStatus(
+      "error",
+      "View Model properties missing"
+    );
+
     return false;
   }
 
-  // Initial tester state.
-  updateUserVoice(Number(userSlider?.value || 0));
-  updateLuriaVoice(Number(luriaSlider?.value || 0));
-  setState(currentMode);
 
-  setRiveStatus("ok", "Rive connected");
+  // Initial tester values.
+
+  updateUserVoice(
+    Number(
+      userSlider?.value || 0
+    )
+  );
+
+
+  updateLuriaVoice(
+    Number(
+      luriaSlider?.value || 0
+    )
+  );
+
+
+  setState(
+    currentMode
+  );
+
+
+  setRiveStatus(
+    "ok",
+    "Rive connected"
+  );
+
+
   return true;
 }
 
+
+// ------------------------------------------------------------
+// CLEANUP
+// ------------------------------------------------------------
+
 function cleanupRive() {
+
+  stopContinuousRiveRendering();
+
+
   stateProp = null;
   userVoiceProp = null;
   luriaVoiceProp = null;
 
-  if (renderingWatchdog) {
-    clearInterval(renderingWatchdog);
-    renderingWatchdog = null;
-  }
 
   if (r) {
+
     try {
+
       r.cleanup();
+
     } catch (err) {
-      console.warn("[Luria] cleanup:", err);
+
+      console.warn(
+        "[Luria] cleanup:",
+        err
+      );
     }
+
+
     r = null;
   }
 }
 
+
+// ------------------------------------------------------------
+// LOAD RIVE
+// ------------------------------------------------------------
+
 function loadRive() {
+
   cleanupRive();
 
-  loading?.classList.remove("hidden");
-  setRiveStatus("", "Loading Rive");
+
+  loading?.classList.remove(
+    "hidden"
+  );
+
+
+  setRiveStatus(
+    "",
+    "Loading Rive"
+  );
+
 
   if (!window.rive?.Rive) {
-    setRiveStatus("error", "Rive WebGL2 runtime did not load");
-    if (loading) {
-      loading.querySelector("strong").textContent = "Unable to load Rive";
-      loading.querySelector("span").textContent = "WebGL2 runtime is unavailable.";
-    }
+
+    setRiveStatus(
+      "error",
+      "Rive WebGL2 runtime unavailable"
+    );
+
+
     return;
   }
 
-const params = {
-  src: RIVE_FILE,
 
-  canvas,
+  const params = {
 
-  artboard: "Final",
+    src:
+      RIVE_FILE,
 
-  stateMachines: "Luria State Machine",
+    canvas,
 
-  autoplay: true,
-  autoBind: true,
+    // Important:
+    // explicitly load the shader wrapper artboard.
+    artboard:
+      ARTBOARD,
 
-  // REQUIRED for WGSL / GPUCanvas Node Scripts
-  enableGPUCanvas: true,
+    // State machine now lives on Final.
+    stateMachines:
+      STATE_MACHINE,
 
-  // MUST remain false with GPU Canvas
-  useOffscreenRenderer: false,
+    autoplay:
+      true,
 
-  onLoad: () => {
-    r.resizeDrawingSurfaceToCanvas();
+    autoBind:
+      true,
 
-    try {
-      r.play();
-      r.startRendering();
-    } catch (err) {
-      console.warn("[Luria] start:", err);
-    }
+    // Required for context:gpuCanvas().
+    enableGPUCanvas:
+      true,
 
-    keepRiveAwake();
+    // GPUCanvas requires this off.
+    useOffscreenRenderer:
+      false,
 
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        loading?.classList.add("hidden");
-      });
-    });
-  },
 
-  onLoadError: (err) => {
-    console.error(
-      "[Luria] Rive load error:",
-      err
-    );
+    onLoad: () => {
 
-    if (loading) {
-      loading.querySelector("strong").textContent =
-        "Luria could not load";
+      console.log(
+        `[Luria] ${BUILD_ID} loaded`
+      );
 
-      loading.querySelector("span").textContent =
-        String(err?.data || err || "Unknown Rive error");
-    }
-  },
-};
 
-r = new rive.Rive(params);
+      r.resizeDrawingSurfaceToCanvas();
 
-  // Scripted/procedural effects need continuous drawing.
+
+      try {
+
+        // Explicitly play the Final SM.
+        r.play(
+          STATE_MACHINE
+        );
+
+      } catch (err) {
+
+        console.warn(
+          "[Luria] play:",
+          err
+        );
+      }
+
+
+      // Start immediately.
+      wakeRive();
+
+
+      // Critical:
+      // keep GPUCanvas rendering alive.
+      startContinuousRiveRendering();
+
+
+      const bound =
+        bindViewModel();
+
+
+      requestAnimationFrame(
+        () => {
+
+          requestAnimationFrame(
+            () => {
+
+              if (bound) {
+
+                loading?.classList.add(
+                  "hidden"
+                );
+              }
+            }
+          );
+        }
+      );
+    },
+
+
+    onLoadError: (err) => {
+
+      console.error(
+        "FULL RIVE LOAD ERROR:",
+        err
+      );
+
+
+      setRiveStatus(
+        "error",
+        "Rive load failed"
+      );
+
+
+      if (loading) {
+
+        loading
+          .querySelector("strong")
+          .textContent =
+          "Luria could not load";
+
+
+        loading
+          .querySelector("span")
+          .textContent =
+          String(
+            err?.data ||
+            err ||
+            "Unknown Rive runtime error"
+          );
+      }
+    },
+  };
+
+
+  // ----------------------------------------------------------
+  // FORCE DRAWING EVEN WHEN THE ARTBOARD LOOKS UNCHANGED
+  // ----------------------------------------------------------
+
   if (
     window.rive.DrawOptimizationOptions &&
     window.rive.DrawOptimizationOptions.AlwaysDraw !== undefined
   ) {
-    params.drawingOptions = window.rive.DrawOptimizationOptions.AlwaysDraw;
+
+    params.drawingOptions =
+      window.rive
+        .DrawOptimizationOptions
+        .AlwaysDraw;
   }
 
-  try {
-    r = new window.rive.Rive(params);
-  } catch (err) {
-    console.error("[Luria] Rive init error:", err);
-    setRiveStatus("error", "Rive initialization failed");
 
-    if (loading) {
-      loading.querySelector("strong").textContent = "Luria could not start";
-      loading.querySelector("span").textContent = "Rive initialization failed.";
-    }
+  try {
+
+    r =
+      new window.rive.Rive(
+        params
+      );
+
+  } catch (err) {
+
+    console.error(
+      "[Luria] Rive init error:",
+      err
+    );
+
+
+    setRiveStatus(
+      "error",
+      "Rive initialization failed"
+    );
   }
 }
 
-// -----------------------
-// Microphone
-// -----------------------
 
-async function startMicrophone(target) {
-  if (!["user", "luria"].includes(target)) return;
-  if (micTarget) return;
+// ============================================================
+// MICROPHONE
+// ============================================================
 
-  const targetProp = target === "user" ? userVoiceProp : luriaVoiceProp;
+let mediaStream = null;
 
-  if (!targetProp) {
-    console.warn("[Luria] Microphone requested before View Model was ready.");
+let audioContext = null;
+
+let analyser = null;
+
+let timeData = null;
+
+let micRAF = null;
+
+let micTarget = null;
+
+let smoothedMicLevel = 0;
+
+
+// ------------------------------------------------------------
+// START MICROPHONE
+// ------------------------------------------------------------
+
+async function startMicrophone(
+  target
+) {
+
+  if (
+    ![
+      "user",
+      "luria"
+    ].includes(target)
+  ) {
+
     return;
   }
 
-  if (!navigator.mediaDevices?.getUserMedia) {
-    micStatus.textContent = "Microphone is not supported in this browser.";
+
+  if (micTarget) {
     return;
   }
+
+
+  if (
+    !navigator.mediaDevices
+      ?.getUserMedia
+  ) {
+
+    if (micStatus) {
+
+      micStatus.textContent =
+        "Microphone is not supported.";
+    }
+
+    return;
+  }
+
 
   try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: false,
-      },
-      video: false,
-    });
 
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    mediaStream =
+      await navigator.mediaDevices
+        .getUserMedia({
 
-    if (audioContext.state === "suspended") {
+          audio: {
+
+            echoCancellation:
+              true,
+
+            noiseSuppression:
+              true,
+
+            autoGainControl:
+              false,
+          },
+
+          video:
+            false,
+        });
+
+
+    audioContext =
+      new (
+        window.AudioContext ||
+        window.webkitAudioContext
+      )();
+
+
+    if (
+      audioContext.state ===
+      "suspended"
+    ) {
+
       await audioContext.resume();
     }
 
-    const source = audioContext.createMediaStreamSource(mediaStream);
 
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0;
+    const source =
+      audioContext
+        .createMediaStreamSource(
+          mediaStream
+        );
 
-    source.connect(analyser);
-    timeData = new Float32Array(analyser.fftSize);
 
-    micTarget = target;
+    analyser =
+      audioContext
+        .createAnalyser();
+
+
+    analyser.fftSize =
+      1024;
+
+
+    analyser.smoothingTimeConstant =
+      0;
+
+
+    source.connect(
+      analyser
+    );
+
+
+    timeData =
+      new Float32Array(
+        analyser.fftSize
+      );
+
+
+    micTarget =
+      target;
+
+
     smoothedMicLevel =
       target === "user"
-        ? Number(userSlider?.value || 0)
-        : Number(luriaSlider?.value || 0);
+        ? Number(
+            userSlider?.value || 0
+          )
+        : Number(
+            luriaSlider?.value || 0
+          );
+
 
     refreshMicButtons();
 
-    micStatus.textContent =
-      target === "user"
-        ? "Microphone → userVoiceLevel"
-        : "Microphone → luriaVoiceLevel";
 
-    keepRiveAwake();
+    if (micStatus) {
+
+      micStatus.textContent =
+        target === "user"
+          ? "Microphone → userVoiceLevel"
+          : "Microphone → luriaVoiceLevel";
+    }
+
+
+    wakeRive();
+
     tickMicrophone();
+
   } catch (err) {
-    console.error("[Luria] Microphone error:", err);
-    micStatus.textContent =
-      "Microphone permission failed. Use HTTPS or localhost and allow access.";
+
+    console.error(
+      "[Luria] Microphone error:",
+      err
+    );
+
+
+    if (micStatus) {
+
+      micStatus.textContent =
+        "Microphone permission failed.";
+    }
   }
 }
+
+
+// ------------------------------------------------------------
+// MICROPHONE LOOP
+// ------------------------------------------------------------
 
 function tickMicrophone() {
-  if (!micTarget || !analyser || !timeData) return;
 
-  analyser.getFloatTimeDomainData(timeData);
+  if (
+    !micTarget ||
+    !analyser ||
+    !timeData
+  ) {
+
+    return;
+  }
+
+
+  analyser.getFloatTimeDomainData(
+    timeData
+  );
+
 
   let sumSquares = 0;
-  for (let i = 0; i < timeData.length; i++) {
-    sumSquares += timeData[i] * timeData[i];
+
+
+  for (
+    let i = 0;
+    i < timeData.length;
+    i++
+  ) {
+
+    sumSquares +=
+      timeData[i] *
+      timeData[i];
   }
 
-  const rms = Math.sqrt(sumSquares / timeData.length);
 
-  // Same practical mapping used by the previous tester:
-  // quiet -> 0, normal speech -> roughly 1–2.5, strong speech -> 3.
-  const noiseGate = 0.015;
-  const aboveGate = Math.max(0, rms - noiseGate);
-  const normalized = clamp(aboveGate * 15, 0, 1);
-  const target = Math.pow(normalized, 0.72) * 3;
+  const rms =
+    Math.sqrt(
+      sumSquares /
+      timeData.length
+    );
 
-  const follow = target > smoothedMicLevel ? 0.28 : 0.09;
+
+  const noiseGate =
+    0.015;
+
+
+  const aboveGate =
+    Math.max(
+      0,
+      rms - noiseGate
+    );
+
+
+  const normalized =
+    clamp(
+      aboveGate * 15,
+      0,
+      1
+    );
+
+
+  const target =
+    Math.pow(
+      normalized,
+      0.72
+    ) * 3;
+
+
+  const follow =
+    target > smoothedMicLevel
+      ? 0.28
+      : 0.09;
+
 
   smoothedMicLevel +=
-    (target - smoothedMicLevel) * follow;
+    (
+      target -
+      smoothedMicLevel
+    ) *
+    follow;
 
-  if (smoothedMicLevel < 0.015) {
-    smoothedMicLevel = 0;
+
+  if (
+    smoothedMicLevel <
+    0.015
+  ) {
+
+    smoothedMicLevel =
+      0;
   }
 
-  if (micTarget === "user") {
-    updateUserVoice(smoothedMicLevel, true);
+
+  if (
+    micTarget === "user"
+  ) {
+
+    updateUserVoice(
+      smoothedMicLevel,
+      true
+    );
+
   } else {
-    updateLuriaVoice(smoothedMicLevel, true);
+
+    updateLuriaVoice(
+      smoothedMicLevel,
+      true
+    );
   }
 
-  micRAF = requestAnimationFrame(tickMicrophone);
+
+  micRAF =
+    requestAnimationFrame(
+      tickMicrophone
+    );
 }
 
+
+// ------------------------------------------------------------
+// STOP MICROPHONE
+// ------------------------------------------------------------
+
 async function stopMicrophone() {
+
   if (micRAF) {
-    cancelAnimationFrame(micRAF);
+
+    cancelAnimationFrame(
+      micRAF
+    );
+
     micRAF = null;
   }
 
-  mediaStream?.getTracks().forEach((track) => track.stop());
-  mediaStream = null;
+
+  mediaStream
+    ?.getTracks()
+    .forEach(
+      (track) =>
+        track.stop()
+    );
+
+
+  mediaStream =
+    null;
+
 
   if (audioContext) {
+
     try {
+
       await audioContext.close();
+
     } catch (_) {}
-    audioContext = null;
+
+
+    audioContext =
+      null;
   }
 
-  analyser = null;
-  timeData = null;
-  micTarget = null;
-  smoothedMicLevel = 0;
+
+  analyser =
+    null;
+
+  timeData =
+    null;
+
+  micTarget =
+    null;
+
+  smoothedMicLevel =
+    0;
+
 
   refreshMicButtons();
 
+
   if (micStatus) {
-    micStatus.textContent = "Microphone is off.";
+
+    micStatus.textContent =
+      "Microphone is off.";
   }
 }
+
+
+// ------------------------------------------------------------
+// MIC BUTTON STATE
+// ------------------------------------------------------------
 
 function refreshMicButtons() {
-  const userOn = micTarget === "user";
-  const luriaOn = micTarget === "luria";
+
+  const userOn =
+    micTarget === "user";
+
+
+  const luriaOn =
+    micTarget === "luria";
+
 
   if (userMicButton) {
-    userMicButton.classList.toggle("active", userOn);
-    userMicButton.textContent = userOn ? "Stop microphone" : "Use microphone";
+
+    userMicButton.classList.toggle(
+      "active",
+      userOn
+    );
+
+
+    userMicButton.textContent =
+      userOn
+        ? "Stop microphone"
+        : "Use microphone";
   }
 
+
   if (luriaMicButton) {
-    luriaMicButton.classList.toggle("active", luriaOn);
-    luriaMicButton.textContent = luriaOn ? "Stop microphone" : "Use microphone";
+
+    luriaMicButton.classList.toggle(
+      "active",
+      luriaOn
+    );
+
+
+    luriaMicButton.textContent =
+      luriaOn
+        ? "Stop microphone"
+        : "Use microphone";
   }
 }
 
-// -----------------------
-// UI events
-// -----------------------
 
-modeButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    setMode(button.dataset.mode);
-  });
-});
+// ============================================================
+// UI EVENTS
+// ============================================================
 
-userSlider?.addEventListener("input", () => {
-  const value = Number(userSlider.value);
-  if (userOutput) userOutput.textContent = value.toFixed(2);
+modeButtons.forEach(
+  (button) => {
 
-  if (micTarget !== "user") {
-    updateUserVoice(value);
+    button.addEventListener(
+      "click",
+      () => {
+
+        setMode(
+          button.dataset.mode
+        );
+      }
+    );
   }
-});
+);
 
-luriaSlider?.addEventListener("input", () => {
-  const value = Number(luriaSlider.value);
-  if (luriaOutput) luriaOutput.textContent = value.toFixed(2);
 
-  if (micTarget !== "luria") {
-    updateLuriaVoice(value);
+userSlider
+  ?.addEventListener(
+    "input",
+    () => {
+
+      const value =
+        Number(
+          userSlider.value
+        );
+
+
+      if (userOutput) {
+
+        userOutput.textContent =
+          value.toFixed(2);
+      }
+
+
+      if (
+        micTarget !== "user"
+      ) {
+
+        updateUserVoice(
+          value
+        );
+      }
+    }
+  );
+
+
+luriaSlider
+  ?.addEventListener(
+    "input",
+    () => {
+
+      const value =
+        Number(
+          luriaSlider.value
+        );
+
+
+      if (luriaOutput) {
+
+        luriaOutput.textContent =
+          value.toFixed(2);
+      }
+
+
+      if (
+        micTarget !== "luria"
+      ) {
+
+        updateLuriaVoice(
+          value
+        );
+      }
+    }
+  );
+
+
+userMicButton
+  ?.addEventListener(
+    "click",
+    async () => {
+
+      if (
+        micTarget === "user"
+      ) {
+
+        await stopMicrophone();
+
+      } else if (!micTarget) {
+
+        await startMicrophone(
+          "user"
+        );
+      }
+    }
+  );
+
+
+luriaMicButton
+  ?.addEventListener(
+    "click",
+    async () => {
+
+      if (
+        micTarget === "luria"
+      ) {
+
+        await stopMicrophone();
+
+      } else if (!micTarget) {
+
+        await startMicrophone(
+          "luria"
+        );
+      }
+    }
+  );
+
+
+// ------------------------------------------------------------
+// TAB / WINDOW RESUME
+// ------------------------------------------------------------
+
+document.addEventListener(
+  "visibilitychange",
+  () => {
+
+    if (
+      document.visibilityState ===
+        "visible" &&
+      r
+    ) {
+
+      wakeRive();
+
+      startContinuousRiveRendering();
+    }
   }
-});
+);
 
-userMicButton?.addEventListener("click", async () => {
-  if (micTarget === "user") {
-    await stopMicrophone();
-  } else if (!micTarget) {
-    await startMicrophone("user");
+
+window.addEventListener(
+  "focus",
+  () => {
+
+    wakeRive();
+
+    startContinuousRiveRendering();
   }
-});
+);
 
-luriaMicButton?.addEventListener("click", async () => {
-  if (micTarget === "luria") {
-    await stopMicrophone();
-  } else if (!micTarget) {
-    await startMicrophone("luria");
-  }
-});
 
-// Resume procedural Rive scripts after tab/browser suspension.
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && r) {
-    try {
-      r.play();
-    } catch (_) {}
-    keepRiveAwake();
-  }
-});
-
-window.addEventListener("focus", keepRiveAwake);
+// ------------------------------------------------------------
+// RESIZE
+// ------------------------------------------------------------
 
 window.addEventListener(
   "resize",
-  () => r?.resizeDrawingSurfaceToCanvas(),
-  { passive: true }
+  () => {
+
+    r?.resizeDrawingSurfaceToCanvas();
+
+    wakeRive();
+  },
+  {
+    passive:
+      true,
+  }
 );
 
-window.addEventListener("beforeunload", () => {
-  stopMicrophone();
-  cleanupRive();
-});
+
+// ------------------------------------------------------------
+// CLEANUP
+// ------------------------------------------------------------
+
+window.addEventListener(
+  "beforeunload",
+  () => {
+
+    stopMicrophone();
+
+    cleanupRive();
+  }
+);
+
+
+// ------------------------------------------------------------
+// START
+// ------------------------------------------------------------
 
 refreshMicButtons();
+
 loadRive();
