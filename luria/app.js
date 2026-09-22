@@ -265,14 +265,18 @@ function loadRive() {
     },
 
     onLoadError: (err) => {
-      console.error("[Luria] Rive load error:", err);
-      setRiveStatus("error", "Could not load assets/luria.riv");
+  console.error("FULL RIVE LOAD ERROR:", err);
 
-      if (loading) {
-        loading.querySelector("strong").textContent = "Luria could not load";
-        loading.querySelector("span").textContent = "Check assets/luria.riv.";
-      }
-    },
+  setRiveStatus("error", "Rive load failed");
+
+  if (loading) {
+    loading.querySelector("strong").textContent =
+      "Luria could not load";
+
+    loading.querySelector("span").textContent =
+      String(err || "Unknown Rive runtime error");
+  }
+},
   };
 
   // Scripted/procedural effects need continuous drawing.
