@@ -15,7 +15,7 @@
 // - Luria speaking -> Rive state "Speaking"
 
 const BUILD_ID = "LURIA-WEB-STATES-v1";
-const RIVE_FILE = "./assets/luria.riv";
+const RIVE_FILE = "./assets/luria.riv?v=20260922-1";
 const STATE_MACHINE = "Luria State Machine";
 
 const STATE_PROPERTY = "state";
@@ -236,6 +236,7 @@ function loadRive() {
     autoplay: true,
     autoBind: true,
     useOffscreenRenderer: false,
+    enablePerfMarks: true,
 
     onLoad: () => {
       r.resizeDrawingSurfaceToCanvas();
