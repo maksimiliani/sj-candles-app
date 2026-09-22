@@ -3,7 +3,7 @@
 //
 // Expected Rive setup:
 // - assets/luria.riv
-// - State Machine: "Luria State Machine"
+// - Artboard: "Final"
 // - Default View Model / Default Instance bound to the artboard
 // - Enum:   state = Idle | Listening | Thinking | Speaking
 // - Number: userVoiceLevel  = 0..3
@@ -14,9 +14,8 @@
 // - Thinking       -> Rive state "Thinking"
 // - Luria speaking -> Rive state "Speaking"
 
-const BUILD_ID = "LURIA-WEB-STATES-v1";
-const RIVE_FILE = "./assets/luria.riv?v=20260922-1";
-const STATE_MACHINE = "Luria State Machine";
+const BUILD_ID = "LURIA-WEB-STATES-v3.1";
+const RIVE_FILE = "./assets/luria.riv";
 
 const STATE_PROPERTY = "state";
 const USER_VOICE_PROPERTY = "userVoiceLevel";
