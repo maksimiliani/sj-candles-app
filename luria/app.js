@@ -3,7 +3,7 @@
 //
 // Expected Rive setup:
 // - assets/luria.riv
-// - Artboard: "Final"
+// - State Machine: "Luria State Machine"
 // - Default View Model / Default Instance bound to the artboard
 // - Enum:   state = Idle | Listening | Thinking | Speaking
 // - Number: userVoiceLevel  = 0..3
@@ -14,11 +14,11 @@
 // - Thinking       -> Rive state "Thinking"
 // - Luria speaking -> Rive state "Speaking"
 
-const BUILD_ID = "LURIA-WEB-STATES-v3.1";
-const RIVE_FILE = "./assets/luria.riv?v=20260922-4";
-
-//const STATE_PROPERTY = "state";
+const BUILD_ID = "LURIA-WEB-STATES-v1";
+const RIVE_FILE = "./assets/luria.riv";
 const STATE_MACHINE = "Luria State Machine";
+
+const STATE_PROPERTY = "state";
 const USER_VOICE_PROPERTY = "userVoiceLevel";
 const LURIA_VOICE_PROPERTY = "luriaVoiceLevel";
 
@@ -232,12 +232,10 @@ function loadRive() {
   const params = {
     src: RIVE_FILE,
     canvas,
-    //artboard: "Final",
     stateMachines: STATE_MACHINE,
     autoplay: true,
     autoBind: true,
     useOffscreenRenderer: false,
-    enablePerfMarks: true,
 
     onLoad: () => {
       r.resizeDrawingSurfaceToCanvas();
@@ -267,18 +265,14 @@ function loadRive() {
     },
 
     onLoadError: (err) => {
-  console.error("FULL RIVE LOAD ERROR:", err);
+      console.error("[Luria] Rive load error:", err);
+      setRiveStatus("error", "Could not load assets/luria.riv");
 
-  setRiveStatus("error", "Rive load failed");
-
-  if (loading) {
-    loading.querySelector("strong").textContent =
-      "Luria could not load";
-
-    loading.querySelector("span").textContent =
-      String(err || "Unknown Rive runtime error");
-  }
-},
+      if (loading) {
+        loading.querySelector("strong").textContent = "Luria could not load";
+        loading.querySelector("span").textContent = "Check assets/luria.riv.";
+      }
+    },
   };
 
   // Scripted/procedural effects need continuous drawing.
