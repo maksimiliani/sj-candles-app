@@ -15,7 +15,7 @@
 // - Luria speaking -> Rive state "Speaking"
 
 const BUILD_ID = "LURIA-WEB-STATES-v3.1";
-const RIVE_FILE = "./assets/luria.riv";
+const RIVE_FILE = "/assets/luria.riv";
 
 const STATE_PROPERTY = "state";
 const USER_VOICE_PROPERTY = "userVoiceLevel";
