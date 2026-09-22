@@ -229,53 +229,60 @@ function loadRive() {
     return;
   }
 
-  const params = {
-    src: RIVE_FILE,
-    canvas,
-    artboard: "Final",
-    stateMachines: "Luria State Machine",
-    autoplay: true,
-    autoBind: true,
-    useOffscreenRenderer: false,
-    enablePerfMarks: true,
+const params = {
+  src: RIVE_FILE,
 
-    onLoad: () => {
-      r.resizeDrawingSurfaceToCanvas();
+  canvas,
 
-      try {
-        r.play();
-      } catch (_) {}
+  artboard: "Final",
 
-      keepRiveAwake();
+  stateMachines: "Luria State Machine",
 
-      const bound = bindViewModel();
+  autoplay: true,
+  autoBind: true,
 
-      // Let the first bound frame render before fading out the loader.
+  // REQUIRED for WGSL / GPUCanvas Node Scripts
+  enableGPUCanvas: true,
+
+  // MUST remain false with GPU Canvas
+  useOffscreenRenderer: false,
+
+  onLoad: () => {
+    r.resizeDrawingSurfaceToCanvas();
+
+    try {
+      r.play();
+      r.startRendering();
+    } catch (err) {
+      console.warn("[Luria] start:", err);
+    }
+
+    keepRiveAwake();
+
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (bound) loading?.classList.add("hidden");
-        });
+        loading?.classList.add("hidden");
       });
+    });
+  },
 
-      renderingWatchdog = window.setInterval(() => {
-        if (r && document.visibilityState === "visible") {
-          keepRiveAwake();
-        }
-      }, 1000);
+  onLoadError: (err) => {
+    console.error(
+      "[Luria] Rive load error:",
+      err
+    );
 
-      console.log(`[Luria] ${BUILD_ID} loaded`);
-    },
+    if (loading) {
+      loading.querySelector("strong").textContent =
+        "Luria could not load";
 
-    onLoadError: (err) => {
-      console.error("[Luria] Rive load error:", err);
-      setRiveStatus("error", "Could not load assets/luria.riv");
+      loading.querySelector("span").textContent =
+        String(err?.data || err || "Unknown Rive error");
+    }
+  },
+};
 
-      if (loading) {
-        loading.querySelector("strong").textContent = "Luria could not load";
-        loading.querySelector("span").textContent = "Check assets/luria.riv.";
-      }
-    },
-  };
+r = new rive.Rive(params);
 
   // Scripted/procedural effects need continuous drawing.
   if (
