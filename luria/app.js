@@ -236,6 +236,7 @@ function loadRive() {
     autoplay: true,
     autoBind: true,
     useOffscreenRenderer: false,
+    enablePerfMarks: true,
 
     onLoad: () => {
       r.resizeDrawingSurfaceToCanvas();
