@@ -17,7 +17,8 @@
 const BUILD_ID = "LURIA-WEB-STATES-v3.1";
 const RIVE_FILE = "./assets/luria.riv?v=20260922-4";
 
-const STATE_PROPERTY = "state";
+//const STATE_PROPERTY = "state";
+const STATE_MACHINE = "Luria State Machine";
 const USER_VOICE_PROPERTY = "userVoiceLevel";
 const LURIA_VOICE_PROPERTY = "luriaVoiceLevel";
 
