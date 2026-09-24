@@ -23,13 +23,14 @@
 //   level drives Rive's luriaVoiceLevel property.
 // ------------------------------------------------------------
 const RIVE_RENDER_DPR = 1.25;
+const AUDIO_VERSION = Date.now();
 
 const BUILD_ID = "LURIA-IMMERSIVE-v2-VOICE-GATE";
 
 const RIVE_FILE = "./assets/luria.riv?v=20260923-1";
-const SHORT_AUDIO_FILE = "./assets/Luria-Short.mp3";
-const LONG_AUDIO_FILE = "./assets/Luria-Long.mp3";
-const BACKGROUND_AUDIO_FILE = "./assets/bg-ambient.mp3";
+const SHORT_AUDIO_SRC = `./assets/Luria-Short.mp3?v=${AUDIO_VERSION}`;
+const LONG_AUDIO_SRC = `./assets/Luria-Long.mp3?v=${AUDIO_VERSION}`;
+const BACKGROUND_AUDIO_SRC = `./assets/bg-ambient.mp3?v=${AUDIO_VERSION}`;
 const BACKGROUND_VOLUME = 0.08;
 
 const ARTBOARD = "Final";
@@ -50,10 +51,10 @@ const SHORT_PROMPT_DELAY_MS = 4000;
 
 // Silence after USER finishes speaking before Luria starts Thinking.
 // Previously: 6500
-const SILENCE_TO_THINK_MS = 3000;
+const SILENCE_TO_THINK_MS = 1500;
 
 // How long Luria stays in Thinking before answering.
-const THINKING_DURATION_MS = 7000;
+const THINKING_DURATION_MS = 5000;
 
 // Pause after Luria finishes speaking before returning to Listening.
 // Previously: 3500
