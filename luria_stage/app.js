@@ -96,6 +96,7 @@ let stateProp = null;
 let userVoiceProp = null;
 let luriaVoiceProp = null;
 let continuousRenderRAF = null;
+let tabSuspended = false;
 
 // ------------------------------------------------------------
 // SESSION / STATE
@@ -961,7 +962,18 @@ async function playShortPrompt() {
   shortPromptEligible = false;
   activityCandidateSince = 0;
 
-  setMode("Speaking");
+  // IMPORTANT:
+  // The short MP3 is only a gentle nudge while Luria remains
+  // in Listening mode. Do NOT switch the Rive state to Speaking.
+  //
+  // playManagedAudio("short") still drives luriaVoiceLevel from
+  // the MP3 amplitude, so any subtle voice-reactive visual treatment
+  // can respond without changing the main state.
+  if (currentMode !== "Listening") {
+    return;
+  }
+
+  setLiveStatus("Luria is listening.");
 
   try {
     await playManagedAudio("short");
@@ -973,9 +985,12 @@ async function playShortPrompt() {
     return;
   }
 
-  setMode("Listening");
+  // Stay in Listening. No state transition is fired here.
+  updateLuriaVoice(0);
   hasSpeechInCurrentTurn = false;
   lastUserVoiceAt = 0;
+  activityCandidateSince = 0;
+  setLiveStatus("Luria is listening.");
 }
 
 function beginThinking() {
@@ -1090,6 +1105,110 @@ function resetConversation() {
 }
 
 // ============================================================
+// PAGE / TAB AUDIO LIFECYCLE
+// ============================================================
+
+function pauseRiveForBackground() {
+  stopContinuousRiveRendering();
+
+  if (!r) {
+    return;
+  }
+
+  // Pause the state machine as well as rendering. This is important
+  // because the .riv file contains its own background music/effects.
+  try {
+    r.pause(STATE_MACHINE);
+  } catch (_) {
+    try {
+      r.pause();
+    } catch (_) {}
+  }
+
+  try {
+    r.stopRendering();
+  } catch (_) {}
+}
+
+async function resumeRiveFromBackground() {
+  if (!r || document.visibilityState !== "visible") {
+    return;
+  }
+
+  try {
+    r.play(STATE_MACHINE);
+  } catch (_) {
+    try {
+      r.play();
+    } catch (_) {}
+  }
+
+  startContinuousRiveRendering();
+  wakeRive();
+}
+
+function handlePageHidden() {
+  if (tabSuspended) {
+    return;
+  }
+
+  tabSuspended = true;
+
+  // Invalidate all pending async conversation actions so a speech clip
+  // cannot finish in the background and move the demo to another state.
+  conversationGeneration += 1;
+  clearConversationTimers();
+
+  // Stop our two HTML audio files immediately.
+  stopActiveAudio();
+
+  // Clear live voice-driven visuals before freezing Rive.
+  updateUserVoice(0);
+  updateLuriaVoice(0);
+
+  // If Luria was speaking/thinking when the page went away, resume from
+  // a clean Listening state when the user returns.
+  hasSpeechInCurrentTurn = false;
+  lastUserVoiceAt = 0;
+  activityCandidateSince = 0;
+
+  pauseRiveForBackground();
+
+  // Suspend the Web Audio graph used by mic + MP3 analysis/playback.
+  // This does not revoke mic permission; it simply stops audio processing.
+  if (audioContext && audioContext.state === "running") {
+    audioContext.suspend().catch(() => {});
+  }
+}
+
+async function handlePageVisible() {
+  if (!tabSuspended) {
+    if (r) {
+      startContinuousRiveRendering();
+      wakeRive();
+    }
+    return;
+  }
+
+  tabSuspended = false;
+
+  if (experienceStarted && audioContext?.state === "suspended") {
+    try {
+      await audioContext.resume();
+    } catch (_) {}
+  }
+
+  await resumeRiveFromBackground();
+
+  if (experienceStarted) {
+    setMode("Listening");
+
+    // Only schedule the one-time nudge if it is still eligible.
+    scheduleShortPrompt();
+  }
+}
+
+// ============================================================
 // START EXPERIENCE
 // ============================================================
 
@@ -1189,16 +1308,22 @@ startExperienceButton?.addEventListener("click", startExperience);
 resetButton?.addEventListener("click", resetConversation);
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && r) {
-    wakeRive();
-    startContinuousRiveRendering();
+  if (document.visibilityState === "hidden") {
+    handlePageHidden();
+  } else {
+    handlePageVisible();
   }
 });
 
+// pagehide also runs for tab/window close and page navigation in cases
+// where beforeunload is skipped or delayed.
+window.addEventListener("pagehide", () => {
+  handlePageHidden();
+});
+
 window.addEventListener("focus", () => {
-  if (r) {
-    wakeRive();
-    startContinuousRiveRendering();
+  if (document.visibilityState === "visible") {
+    handlePageVisible();
   }
 });
 
@@ -1213,6 +1338,7 @@ window.addEventListener(
 
 window.addEventListener("beforeunload", () => {
   clearConversationTimers();
+  pauseRiveForBackground();
   stopActiveAudio();
   stopContinuousRiveRendering();
 
