@@ -18,6 +18,11 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   overflow: hidden;
+
+  /* Desktop: center the Luria experience as one phone-sized surface. */
+  display: grid;
+  place-items: center;
+  padding: 16px;
 }
 
 button { font: inherit; }
@@ -29,14 +34,20 @@ button:focus-visible {
 
 .experience {
   position: relative;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
+
+  /* Desktop presentation: narrow, centered, immersive. */
+  width: min(450px, calc(100vw - 32px));
+  height: min(920px, calc(100vh - 32px));
+  height: min(920px, calc(100dvh - 32px));
   min-height: 520px;
+
   overflow: hidden;
+  border-radius: 30px;
+
   background:
     radial-gradient(circle at 50% 30%, rgba(116, 97, 159, .10), transparent 42rem),
     #0d0d10;
+
   isolation: isolate;
 }
 
@@ -277,6 +288,29 @@ button:focus-visible {
   user-select: none;
 }
 
+/* Separate system chrome: status/time at top + phone home indicator at bottom.
+   Both scale with the experience while never exceeding its 450px desktop width. */
+.phone-chrome {
+  position: absolute;
+  left: 50%;
+  z-index: 6;
+  display: block;
+  width: 100%;
+  max-width: 450px;
+  height: auto;
+  transform: translateX(-50%);
+  pointer-events: none;
+  user-select: none;
+}
+
+.phone-status-bar {
+  top: 0;
+}
+
+.phone-home-bar {
+  bottom: 0;
+}
+
 .mic-dot {
   width: 6px;
   height: 6px;
@@ -343,9 +377,38 @@ button:focus-visible {
   border: 0 !important;
 }
 
-@media (max-width: 540px) {
+@media (max-width: 600px) {
+  body {
+    display: block;
+    padding: 0;
+  }
+
+  .experience {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    border-radius: 0;
+  }
+
   .reset-button span { display: none; }
   .reset-button { width: 40px; justify-content: center; padding: 0; }
+}
+
+/* Keep actual phones full-screen even in landscape. */
+@media (max-height: 600px) and (pointer: coarse) {
+  body {
+    display: block;
+    padding: 0;
+  }
+
+  .experience {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    border-radius: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
