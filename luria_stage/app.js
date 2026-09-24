@@ -28,9 +28,9 @@ const AUDIO_VERSION = Date.now();
 const BUILD_ID = "LURIA-IMMERSIVE-v2-VOICE-GATE";
 
 const RIVE_FILE = "./assets/luria.riv?v=20260923-1";
-const SHORT_AUDIO = `./assets/Luria-Short.mp3?v=${AUDIO_VERSION}`;
-const LONG_AUDIO = `./assets/Luria-Long.mp3?v=${AUDIO_VERSION}`;
-const BACKGROUND_AUDIO = `./assets/bg-ambient.wav?v=${AUDIO_VERSION}`;
+const SHORT_AUDIO_FIlE = `./assets/Luria-Short.mp3?v=${AUDIO_VERSION}`;
+const LONG_AUDIO_FIlE = `./assets/Luria-Long.mp3?v=${AUDIO_VERSION}`;
+const BACKGROUND_AUDIO_FIlE = `./assets/bg-ambient.wav?v=${AUDIO_VERSION}`;
 const BACKGROUND_VOLUME = 0.08;
 
 const ARTBOARD = "Final";
