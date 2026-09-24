@@ -437,40 +437,87 @@ function createRive() {
     const params = {
       src: RIVE_FILE,
       canvas,
+
+      // IMPORTANT: keep the exact working Rive setup from the
+      // previous demo. "Final" is the shader-wrapper artboard.
       artboard: ARTBOARD,
       stateMachines: STATE_MACHINE,
-      autoplay: false,
+
+      // This was required in the working version. The state machine
+      // must already be running for the Final artboard / scripted GPU
+      // content to render correctly.
+      autoplay: true,
+
+      // Keep the View Model automatically bound exactly as before.
       autoBind: true,
+
+      // Required by the GPUCanvas / WGSL content inside Luria.
       enableGPUCanvas: true,
+
+      // GPUCanvas requires the offscreen renderer to remain disabled.
       useOffscreenRenderer: false,
 
       onLoad: () => {
         try {
-          r.resizeDrawingSurfaceToCanvas();
-          bindViewModel();
-          wakeRive();
           console.log(`[Luria] ${BUILD_ID} loaded`);
-          resolve();
+
+          // Keep the original working initialization order.
+          r.resizeDrawingSurfaceToCanvas();
+
+          try {
+            // Explicitly play the state machine even though autoplay
+            // is enabled. This is intentional and matches the previous
+            // working setup.
+            r.play(STATE_MACHINE);
+          } catch (playError) {
+            console.warn("[Luria] play:", playError);
+          }
+
+          // Wake the renderer immediately.
+          wakeRive();
+
+          // CRITICAL for the Node Script / GPUCanvas shader animation:
+          // keep requesting frames even when the authored artboard looks
+          // unchanged to the high-level runtime.
+          startContinuousRiveRendering();
+
+          // Bind state / userVoiceLevel / luriaVoiceLevel only after the
+          // artboard + state machine are running.
+          bindViewModel();
+
+          // Give Rive two frames to finish the first visible GPU draw,
+          // mirroring the previous working demo behavior.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              wakeRive();
+              resolve();
+            });
+          });
         } catch (error) {
+          console.error("[Luria] Rive onLoad setup failed:", error);
           reject(error);
         }
       },
 
       onLoadError: (error) => {
+        console.error("FULL RIVE LOAD ERROR:", error);
         reject(new Error(String(error?.data || error || "Rive load failed")));
       },
     };
 
+    // Force drawing exactly as in the previous working JS file.
     if (
       window.rive.DrawOptimizationOptions &&
       window.rive.DrawOptimizationOptions.AlwaysDraw !== undefined
     ) {
-      params.drawingOptions = window.rive.DrawOptimizationOptions.AlwaysDraw;
+      params.drawingOptions =
+        window.rive.DrawOptimizationOptions.AlwaysDraw;
     }
 
     try {
       r = new window.rive.Rive(params);
     } catch (error) {
+      console.error("[Luria] Rive init error:", error);
       reject(error);
     }
   });
@@ -1144,15 +1191,12 @@ resetButton?.addEventListener("click", resetConversation);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && r) {
     wakeRive();
-
-    if (experienceStarted) {
-      startContinuousRiveRendering();
-    }
+    startContinuousRiveRendering();
   }
 });
 
 window.addEventListener("focus", () => {
-  if (experienceStarted) {
+  if (r) {
     wakeRive();
     startContinuousRiveRendering();
   }
