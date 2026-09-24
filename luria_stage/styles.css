@@ -390,6 +390,10 @@ button:focus-visible {
 
   .reset-button span { display: none; }
   .reset-button { width: 40px; justify-content: center; padding: 0; }
+
+  .phone-status-bar {
+    display: none;
+  }
 }
 
 /* Keep actual phones full-screen even in landscape. */
