@@ -260,6 +260,17 @@ button:focus-visible {
   backdrop-filter: blur(12px);
   font-size: 11px;
   letter-spacing: .01em;
+  bottom: 80px;
+}
+
+.shell-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
 }
 
 .mic-dot {

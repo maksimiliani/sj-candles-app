@@ -45,7 +45,7 @@ const LURIA_VOICE_PROPERTY = "luriaVoiceLevel";
 
 // How long Luria waits for the user to begin speaking
 // before playing the one-time short nudge.
-const SHORT_PROMPT_DELAY_MS = 6000;
+const SHORT_PROMPT_DELAY_MS = 4000;
 
 // Silence after USER finishes speaking before Luria starts Thinking.
 // Previously: 6500
@@ -56,7 +56,7 @@ const THINKING_DURATION_MS = 7000;
 
 // Pause after Luria finishes speaking before returning to Listening.
 // Previously: 3500
-const POST_SPEECH_PAUSE_MS = 1300;
+const POST_SPEECH_PAUSE_MS = 2000;
 
 // Voice activity detection lives entirely in web JS. Rive only receives
 // the resulting state + voice level for visuals.
