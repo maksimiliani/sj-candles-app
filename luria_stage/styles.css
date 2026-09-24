@@ -293,7 +293,6 @@ button:focus-visible {
   z-index: 6;
   display: block;
   width: 100%;
-  max-width: 450px;
   height: auto;
   transform: translateX(-50%);
   pointer-events: none;
