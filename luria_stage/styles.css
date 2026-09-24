@@ -247,7 +247,6 @@ button:focus-visible {
 .session-indicator {
   position: absolute;
   left: 50%;
-  bottom: max(22px, calc(env(safe-area-inset-bottom) + 14px));
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -260,7 +259,8 @@ button:focus-visible {
   backdrop-filter: blur(12px);
   font-size: 11px;
   letter-spacing: .01em;
-  bottom: 80px;
+  top: max(22px, calc(env(safe-area-inset-bottom) + 14px));
+  display: none;
 }
 
 .shell-overlay {
