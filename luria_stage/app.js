@@ -9,6 +9,11 @@
 //   -> Speaking
 //   -> Listening again
 //
+// Background ambience:
+//   bg-ambient.mp3 starts after the user enables microphone + sound,
+//   loops at 20% volume, pauses while the page is hidden, and resumes
+//   when the user returns.
+//
 // Short prompt:
 //   Plays once per session only when the user has not started
 //   speaking after the configured listening delay.
@@ -23,6 +28,8 @@ const BUILD_ID = "LURIA-IMMERSIVE-v1";
 const RIVE_FILE = "./assets/luria.riv?v=20260923-1";
 const SHORT_AUDIO_FILE = "./assets/Luria-Short.mp3";
 const LONG_AUDIO_FILE = "./assets/Luria-Long.mp3";
+const BACKGROUND_AUDIO_FILE = "./assets/bg-ambient.mp3";
+const BACKGROUND_VOLUME = 0.20;
 
 const ARTBOARD = "Final";
 const STATE_MACHINE = "Luria State Machine";
@@ -155,6 +162,14 @@ const audioAssets = {
 let activeAudio = null;
 let luriaAudioRAF = null;
 let smoothedLuriaLevel = 0;
+
+// ------------------------------------------------------------
+// BACKGROUND AMBIENCE
+// ------------------------------------------------------------
+
+let backgroundAudio = null;
+let backgroundAudioObjectUrl = null;
+let backgroundWasPlayingBeforeHide = false;
 
 // ============================================================
 // GENERIC HELPERS
@@ -319,23 +334,39 @@ function waitForAudioMetadata(element) {
 }
 
 async function loadAudioAssets() {
-  setLoaderProgress(50, "Loading audio", "Loading audio • 1 of 2", "audio");
+  setLoaderProgress(50, "Loading audio", "Loading audio • 1 of 3", "audio");
 
   const shortBlob = await fetchAssetWithProgress(SHORT_AUDIO_FILE, (ratio) => {
-    setLoaderProgress(50 + ratio * 24, "Loading audio", "Loading audio • 1 of 2", "audio");
+    setLoaderProgress(50 + ratio * 16, "Loading audio", "Loading audio • 1 of 3", "audio");
   });
 
   const shortElement = makeAudioElement(shortBlob, "short");
   await waitForAudioMetadata(shortElement);
 
-  setLoaderProgress(75, "Loading audio", "Loading audio • 2 of 2", "audio");
+  setLoaderProgress(67, "Loading audio", "Loading audio • 2 of 3", "audio");
 
   const longBlob = await fetchAssetWithProgress(LONG_AUDIO_FILE, (ratio) => {
-    setLoaderProgress(75 + ratio * 24, "Loading audio", "Loading audio • 2 of 2", "audio");
+    setLoaderProgress(67 + ratio * 16, "Loading audio", "Loading audio • 2 of 3", "audio");
   });
 
   const longElement = makeAudioElement(longBlob, "long");
   await waitForAudioMetadata(longElement);
+
+  setLoaderProgress(84, "Loading audio", "Loading audio • 3 of 3", "audio");
+
+  const backgroundBlob = await fetchAssetWithProgress(BACKGROUND_AUDIO_FILE, (ratio) => {
+    setLoaderProgress(84 + ratio * 15, "Loading audio", "Loading audio • 3 of 3", "audio");
+  });
+
+  backgroundAudioObjectUrl = URL.createObjectURL(backgroundBlob);
+  backgroundAudio = new Audio();
+  backgroundAudio.preload = "auto";
+  backgroundAudio.src = backgroundAudioObjectUrl;
+  backgroundAudio.playsInline = true;
+  backgroundAudio.loop = true;
+  backgroundAudio.volume = BACKGROUND_VOLUME;
+
+  await waitForAudioMetadata(backgroundAudio);
 
   setLoaderProgress(100, "Ready", "Luria is ready to listen.", "audio");
 }
@@ -637,7 +668,66 @@ async function prepareAudioPlayback() {
   await Promise.all([
     primeAudioElement(audioAssets.short.element),
     primeAudioElement(audioAssets.long.element),
+    primeAudioElement(backgroundAudio),
   ]);
+}
+
+async function startBackgroundAudio() {
+  if (!backgroundAudio) {
+    return;
+  }
+
+  backgroundAudio.loop = true;
+  backgroundAudio.volume = BACKGROUND_VOLUME;
+  backgroundAudio.muted = false;
+
+  try {
+    await backgroundAudio.play();
+  } catch (error) {
+    console.warn("[Luria] Background ambience could not start:", error);
+  }
+}
+
+function pauseBackgroundAudio() {
+  if (!backgroundAudio) {
+    backgroundWasPlayingBeforeHide = false;
+    return;
+  }
+
+  backgroundWasPlayingBeforeHide = !backgroundAudio.paused && !backgroundAudio.ended;
+
+  try {
+    backgroundAudio.pause();
+  } catch (_) {}
+}
+
+async function resumeBackgroundAudio() {
+  if (!backgroundAudio || !experienceStarted || !backgroundWasPlayingBeforeHide) {
+    return;
+  }
+
+  backgroundAudio.volume = BACKGROUND_VOLUME;
+  backgroundAudio.loop = true;
+  backgroundAudio.muted = false;
+
+  try {
+    await backgroundAudio.play();
+  } catch (error) {
+    console.warn("[Luria] Background ambience could not resume:", error);
+  }
+}
+
+function stopBackgroundAudio() {
+  backgroundWasPlayingBeforeHide = false;
+
+  if (!backgroundAudio) {
+    return;
+  }
+
+  try {
+    backgroundAudio.pause();
+    backgroundAudio.currentTime = 0;
+  } catch (_) {}
 }
 
 // ============================================================
@@ -1095,11 +1185,8 @@ function resetConversation() {
     resetSessionMemory();
   }
 
-  // We intentionally do NOT stop/replay the Rive state machine here.
-  // The Rive file contains its own background music/effects; stopping and
-  // replaying the state machine can cause editor audio events to overlap.
-  // Returning the bound state to Listening resets the visible experience
-  // without duplicating Rive audio playback.
+  // Keep the independent background ambience running through Reset.
+  // Reset only restarts the conversation state, not the soundtrack.
   setMode("Listening");
   scheduleShortPrompt();
 }
@@ -1115,8 +1202,7 @@ function pauseRiveForBackground() {
     return;
   }
 
-  // Pause the state machine as well as rendering. This is important
-  // because the .riv file contains its own background music/effects.
+  // Pause the state machine as well as rendering while the page is hidden.
   try {
     r.pause(STATE_MACHINE);
   } catch (_) {
@@ -1159,8 +1245,10 @@ function handlePageHidden() {
   conversationGeneration += 1;
   clearConversationTimers();
 
-  // Stop our two HTML audio files immediately.
+  // Stop the managed speech clip immediately and pause the looping
+  // background ambience at its current position.
   stopActiveAudio();
+  pauseBackgroundAudio();
 
   // Clear live voice-driven visuals before freezing Rive.
   updateUserVoice(0);
@@ -1199,6 +1287,7 @@ async function handlePageVisible() {
   }
 
   await resumeRiveFromBackground();
+  await resumeBackgroundAudio();
 
   if (experienceStarted) {
     setMode("Listening");
@@ -1229,6 +1318,10 @@ async function startExperience() {
     // page the user activation browsers require for later audible playback.
     await prepareAudioPlayback();
     await enableMicrophone();
+
+    // Start the independent ambient soundtrack from the same user gesture.
+    // It loops continuously at 20% volume until the page is hidden/closed.
+    await startBackgroundAudio();
 
     // Start Rive only after the user has intentionally entered the audio
     // experience. This gives Rive's own background music / audio events the
@@ -1282,7 +1375,7 @@ async function boot() {
     await createRive();
     setLoaderProgress(50, "Loading Luria", "Visual experience ready.", "luria");
 
-    // Second loader stage contains both speech assets.
+    // Second loader stage contains both speech assets plus background ambience.
     await loadAudioAssets();
 
     await sleep(180);
@@ -1340,6 +1433,7 @@ window.addEventListener("beforeunload", () => {
   clearConversationTimers();
   pauseRiveForBackground();
   stopActiveAudio();
+  stopBackgroundAudio();
   stopContinuousRiveRendering();
 
   if (micRAF !== null) {
@@ -1358,6 +1452,13 @@ window.addEventListener("beforeunload", () => {
       URL.revokeObjectURL(asset.objectUrl);
     }
   });
+
+  if (backgroundAudioObjectUrl) {
+    URL.revokeObjectURL(backgroundAudioObjectUrl);
+    backgroundAudioObjectUrl = null;
+  }
+
+  backgroundAudio = null;
 
   try {
     r?.cleanup();
