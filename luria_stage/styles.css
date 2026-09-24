@@ -41,9 +41,6 @@ button:focus-visible {
   height: min(920px, calc(100dvh - 32px));
   min-height: 520px;
 
-  overflow: hidden;
-  border-radius: 30px;
-
   background:
     radial-gradient(circle at 50% 30%, rgba(116, 97, 159, .10), transparent 42rem),
     #0d0d10;
