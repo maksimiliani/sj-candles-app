@@ -23,7 +23,7 @@
 //   level drives Rive's luriaVoiceLevel property.
 // ------------------------------------------------------------
 
-const BUILD_ID = "LURIA-IMMERSIVE-v1";
+const BUILD_ID = "LURIA-IMMERSIVE-v2-VOICE-GATE";
 
 const RIVE_FILE = "./assets/luria.riv?v=20260923-1";
 const SHORT_AUDIO_FILE = "./assets/Luria-Short.mp3";
@@ -48,10 +48,24 @@ const SILENCE_TO_THINK_MS = 6500;
 const THINKING_DURATION_MS = 7000;
 const POST_SPEECH_PAUSE_MS = 3500;
 
-// How loud the microphone must be before it counts as intentional
-// user speech. This uses the normalized 0..3 voice value.
-const USER_ACTIVITY_LEVEL = 0.34;
-const USER_ACTIVITY_HOLD_MS = 180;
+// Voice activity detection lives entirely in web JS. Rive only receives
+// the resulting state + voice level for visuals.
+//
+// Listening is intentionally more sensitive than Thinking. While the
+// one-time short nudge is playing, use a stronger gate so Luria's own
+// speaker output is much less likely to be mistaken for the user.
+const LISTENING_ACTIVITY_LEVEL = 0.38;
+const LISTENING_ACTIVITY_HOLD_MS = 220;
+
+const THINKING_ACTIVITY_LEVEL = 0.46;
+const THINKING_ACTIVITY_HOLD_MS = 260;
+
+const SHORT_NUDGE_ACTIVITY_LEVEL = 0.56;
+const SHORT_NUDGE_ACTIVITY_HOLD_MS = 260;
+
+// Very low residual room noise should not animate Luria's user-voice
+// visuals even though we continue analysing the microphone internally.
+const USER_VISUAL_GATE_LEVEL = 0.12;
 
 // Reset is treated as a fresh demo session. Set false if Reset should
 // preserve the "short prompt already used" memory.
@@ -749,7 +763,8 @@ async function enableMicrophone() {
     audio: {
       echoCancellation: true,
       noiseSuppression: true,
-      autoGainControl: false,
+      autoGainControl: true,
+      channelCount: 1,
     },
     video: false,
   });
@@ -818,23 +833,33 @@ function processMicrophoneLevel(level, now) {
   }
 
   if (currentMode === "Speaking") {
-    // Do not let Luria's speakers / headphones feed back into userVoiceLevel.
+    // Luria's long response owns the speaking visuals. We still keep the
+    // microphone stream alive, but do not let speaker leakage influence
+    // userVoiceLevel or conversation state while she is speaking.
     updateUserVoice(0);
     activityCandidateSince = 0;
     return;
   }
 
-  const active = level >= USER_ACTIVITY_LEVEL;
-
   if (currentMode === "Listening") {
-    updateUserVoice(level);
+    const shortNudgeIsPlaying = activeAudio?.key === "short";
+    const activityLevel = shortNudgeIsPlaying
+      ? SHORT_NUDGE_ACTIVITY_LEVEL
+      : LISTENING_ACTIVITY_LEVEL;
+    const activityHold = shortNudgeIsPlaying
+      ? SHORT_NUDGE_ACTIVITY_HOLD_MS
+      : LISTENING_ACTIVITY_HOLD_MS;
 
-    if (active) {
+    // Rive is visual-only: send a gated version of the microphone level so
+    // tiny room noise does not make the character react visually.
+    updateUserVoice(level >= USER_VISUAL_GATE_LEVEL ? level : 0);
+
+    if (level >= activityLevel) {
       if (activityCandidateSince === 0) {
         activityCandidateSince = now;
       }
 
-      if (now - activityCandidateSince >= USER_ACTIVITY_HOLD_MS) {
+      if (now - activityCandidateSince >= activityHold) {
         lastUserVoiceAt = now;
         hasSpeechInCurrentTurn = true;
 
@@ -842,6 +867,12 @@ function processMicrophoneLevel(level, now) {
           userHasEverSpoken = true;
           shortPromptEligible = false;
           clearTimer("short");
+        }
+
+        // If the user begins speaking while the one-time nudge is already
+        // playing, stop the nudge immediately and keep Listening active.
+        if (activeAudio?.key === "short") {
+          stopActiveAudio();
         }
       }
     } else {
@@ -862,12 +893,12 @@ function processMicrophoneLevel(level, now) {
   if (currentMode === "Thinking") {
     updateUserVoice(0);
 
-    if (active) {
+    if (level >= THINKING_ACTIVITY_LEVEL) {
       if (activityCandidateSince === 0) {
         activityCandidateSince = now;
       }
 
-      if (now - activityCandidateSince >= USER_ACTIVITY_HOLD_MS) {
+      if (now - activityCandidateSince >= THINKING_ACTIVITY_HOLD_MS) {
         interruptThinkingWithUserSpeech(now);
       }
     } else {
@@ -1075,7 +1106,15 @@ async function playShortPrompt() {
     return;
   }
 
-  // Stay in Listening. No state transition is fired here.
+  // If the user interrupted the nudge, preserve their active turn. The
+  // microphone loop already stopped the short audio and marked speech.
+  if (userHasEverSpoken || hasSpeechInCurrentTurn) {
+    updateLuriaVoice(0);
+    setLiveStatus("Luria is listening.");
+    return;
+  }
+
+  // Nudge finished without user speech. Stay in Listening and wait.
   updateLuriaVoice(0);
   hasSpeechInCurrentTurn = false;
   lastUserVoiceAt = 0;
