@@ -29,7 +29,7 @@ const BUILD_ID = "LURIA-IMMERSIVE-v2-VOICE-GATE";
 const RIVE_FILE = "./assets/luria.riv?v=20260923-1";
 const SHORT_AUDIO_FILE = "./assets/Luria-Short.mp3";
 const LONG_AUDIO_FILE = "./assets/Luria-Long.mp3";
-const BACKGROUND_AUDIO_FILE = "./assets/bg-ambient.mp3";
+const BACKGROUND_AUDIO_FILE = "./assets/bg-ambient.wav";
 const BACKGROUND_VOLUME = 0.08;
 
 const ARTBOARD = "Final";
