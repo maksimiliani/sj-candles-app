@@ -80,6 +80,16 @@ const THINKING_ACTIVITY_LEVEL = 0.76;
 // so a bang/click/door/etc. doesn't interrupt Thinking.
 const THINKING_ACTIVITY_HOLD_MS = 350;
 
+// Ignore mic transients briefly when Thinking starts.
+// This helps Safari/iPhone audio processing settle before interruptions are allowed.
+const THINKING_INTERRUPT_GRACE_MS = 1250;
+
+// While Luria is speaking, only a very clear user voice should interrupt her.
+// These values are intentionally stricter than normal Listening.
+const SPEAKING_INTERRUPT_LEVEL = 0.90;
+const SPEAKING_INTERRUPT_HOLD_MS = 450;
+const SPEAKING_INTERRUPT_GRACE_MS = 1200;
+
 // While the short Luria nudge is playing.
 const SHORT_NUDGE_ACTIVITY_LEVEL = 0.76;
 const SHORT_NUDGE_ACTIVITY_HOLD_MS = 350;
@@ -159,6 +169,9 @@ let shortPromptTimer = null;
 let thinkingTimer = null;
 let postSpeechTimer = null;
 
+let thinkingStartedAt = 0;
+let speakingStartedAt = 0;
+
 // ------------------------------------------------------------
 // MICROPHONE / WEB AUDIO
 // ------------------------------------------------------------
@@ -204,6 +217,15 @@ let smoothedLuriaLevel = 0;
 
 let backgroundAudio = null;
 let backgroundAudioObjectUrl = null;
+
+// Background ambience uses a decoded Web Audio buffer instead of HTMLAudio.loop.
+// This is much more reliable for seamless looping on iOS Safari.
+let backgroundBuffer = null;
+let backgroundSource = null;
+let backgroundGain = null;
+let backgroundStartedAt = 0;
+let backgroundOffset = 0;
+let backgroundIsPlaying = false;
 let backgroundWasPlayingBeforeHide = false;
 
 // ============================================================
@@ -394,14 +416,26 @@ async function loadAudioAssets() {
   });
 
   backgroundAudioObjectUrl = URL.createObjectURL(backgroundBlob);
+
+  // Keep a normal media element only as a fallback.
   backgroundAudio = new Audio();
   backgroundAudio.preload = "auto";
   backgroundAudio.src = backgroundAudioObjectUrl;
   backgroundAudio.playsInline = true;
-  backgroundAudio.loop = true;
   backgroundAudio.volume = BACKGROUND_VOLUME;
 
   await waitForAudioMetadata(backgroundAudio);
+
+  // Decode once for gapless Web Audio looping. This avoids the small restart
+  // seam iOS Safari can introduce with HTMLAudioElement.loop.
+  try {
+    await ensureAudioContext();
+    const arrayBuffer = await backgroundBlob.arrayBuffer();
+    backgroundBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+  } catch (error) {
+    console.warn("[Luria] Could not decode background WAV for Web Audio loop; using HTMLAudio fallback.", error);
+    backgroundBuffer = null;
+  }
 
   setLoaderProgress(100, "Ready", "Luria is ready to listen.", "audio");
 }
@@ -504,16 +538,6 @@ function createRive() {
     const params = {
       src: RIVE_FILE,
       canvas,
-
-      // Presentation only: fill the responsive frame and crop from center
-      // instead of letterboxing Luria.
-      layout:
-        window.rive.Layout && window.rive.Fit && window.rive.Alignment
-          ? new window.rive.Layout({
-              fit: window.rive.Fit.Cover,
-              alignment: window.rive.Alignment.Center,
-            })
-          : undefined,
 
       // IMPORTANT: keep the exact working Rive setup from the
       // previous demo. "Final" is the shader-wrapper artboard.
@@ -713,11 +737,66 @@ async function prepareAudioPlayback() {
   await Promise.all([
     primeAudioElement(audioAssets.short.element),
     primeAudioElement(audioAssets.long.element),
-    primeAudioElement(backgroundAudio),
+    backgroundBuffer ? Promise.resolve() : primeAudioElement(backgroundAudio),
   ]);
 }
 
+function createBackgroundSource(offsetSeconds = 0) {
+  if (!audioContext || !backgroundBuffer) {
+    return null;
+  }
+
+  if (!backgroundGain) {
+    backgroundGain = audioContext.createGain();
+    backgroundGain.gain.value = BACKGROUND_VOLUME;
+    backgroundGain.connect(audioContext.destination);
+  }
+
+  const source = audioContext.createBufferSource();
+  source.buffer = backgroundBuffer;
+  source.loop = true;
+  source.connect(backgroundGain);
+
+  const duration = backgroundBuffer.duration || 0;
+  const safeOffset =
+    duration > 0 ? ((offsetSeconds % duration) + duration) % duration : 0;
+
+  source.start(0, safeOffset);
+
+  backgroundStartedAt = audioContext.currentTime - safeOffset;
+  backgroundSource = source;
+  backgroundIsPlaying = true;
+
+  source.onended = () => {
+    if (backgroundSource === source) {
+      backgroundSource = null;
+      backgroundIsPlaying = false;
+    }
+  };
+
+  return source;
+}
+
 async function startBackgroundAudio() {
+  await ensureAudioContext();
+
+  if (backgroundBuffer) {
+    if (backgroundIsPlaying && backgroundSource) {
+      return;
+    }
+
+    if (backgroundGain) {
+      backgroundGain.gain.setValueAtTime(
+        BACKGROUND_VOLUME,
+        audioContext.currentTime
+      );
+    }
+
+    createBackgroundSource(backgroundOffset);
+    return;
+  }
+
+  // Fallback only if Web Audio decode failed.
   if (!backgroundAudio) {
     return;
   }
@@ -734,12 +813,38 @@ async function startBackgroundAudio() {
 }
 
 function pauseBackgroundAudio() {
+  if (backgroundBuffer && audioContext) {
+    backgroundWasPlayingBeforeHide = backgroundIsPlaying;
+
+    if (backgroundIsPlaying && backgroundSource) {
+      const duration = backgroundBuffer.duration || 0;
+      const elapsed = Math.max(0, audioContext.currentTime - backgroundStartedAt);
+
+      backgroundOffset =
+        duration > 0 ? elapsed % duration : 0;
+
+      try {
+        backgroundSource.stop();
+      } catch (_) {}
+
+      try {
+        backgroundSource.disconnect();
+      } catch (_) {}
+
+      backgroundSource = null;
+      backgroundIsPlaying = false;
+    }
+
+    return;
+  }
+
   if (!backgroundAudio) {
     backgroundWasPlayingBeforeHide = false;
     return;
   }
 
-  backgroundWasPlayingBeforeHide = !backgroundAudio.paused && !backgroundAudio.ended;
+  backgroundWasPlayingBeforeHide =
+    !backgroundAudio.paused && !backgroundAudio.ended;
 
   try {
     backgroundAudio.pause();
@@ -747,7 +852,28 @@ function pauseBackgroundAudio() {
 }
 
 async function resumeBackgroundAudio() {
-  if (!backgroundAudio || !experienceStarted || !backgroundWasPlayingBeforeHide) {
+  if (!experienceStarted || !backgroundWasPlayingBeforeHide) {
+    return;
+  }
+
+  await ensureAudioContext();
+
+  if (backgroundBuffer) {
+    if (!backgroundIsPlaying) {
+      if (backgroundGain) {
+        backgroundGain.gain.setValueAtTime(
+          BACKGROUND_VOLUME,
+          audioContext.currentTime
+        );
+      }
+
+      createBackgroundSource(backgroundOffset);
+    }
+
+    return;
+  }
+
+  if (!backgroundAudio) {
     return;
   }
 
@@ -764,15 +890,28 @@ async function resumeBackgroundAudio() {
 
 function stopBackgroundAudio() {
   backgroundWasPlayingBeforeHide = false;
+  backgroundOffset = 0;
 
-  if (!backgroundAudio) {
-    return;
+  if (backgroundSource) {
+    try {
+      backgroundSource.stop();
+    } catch (_) {}
+
+    try {
+      backgroundSource.disconnect();
+    } catch (_) {}
+
+    backgroundSource = null;
   }
 
-  try {
-    backgroundAudio.pause();
-    backgroundAudio.currentTime = 0;
-  } catch (_) {}
+  backgroundIsPlaying = false;
+
+  if (backgroundAudio) {
+    try {
+      backgroundAudio.pause();
+      backgroundAudio.currentTime = 0;
+    } catch (_) {}
+  }
 }
 
 // ============================================================
@@ -864,11 +1003,29 @@ function processMicrophoneLevel(level, now) {
   }
 
   if (currentMode === "Speaking") {
-    // Luria's long response owns the speaking visuals. We still keep the
-    // microphone stream alive, but do not let speaker leakage influence
-    // userVoiceLevel or conversation state while she is speaking.
+    // Luria's long response owns the speaking visuals, but the microphone
+    // can still interrupt her when the user speaks clearly and persistently.
+    // A grace period + high threshold protects against Luria's own speaker
+    // output and Safari/iPhone audio-processing transients.
     updateUserVoice(0);
-    activityCandidateSince = 0;
+
+    if (now - speakingStartedAt < SPEAKING_INTERRUPT_GRACE_MS) {
+      activityCandidateSince = 0;
+      return;
+    }
+
+    if (level >= SPEAKING_INTERRUPT_LEVEL) {
+      if (activityCandidateSince === 0) {
+        activityCandidateSince = now;
+      }
+
+      if (now - activityCandidateSince >= SPEAKING_INTERRUPT_HOLD_MS) {
+        interruptSpeakingWithUserSpeech(now);
+      }
+    } else {
+      activityCandidateSince = 0;
+    }
+
     return;
   }
 
@@ -923,6 +1080,11 @@ function processMicrophoneLevel(level, now) {
 
   if (currentMode === "Thinking") {
     updateUserVoice(0);
+
+    if (now - thinkingStartedAt < THINKING_INTERRUPT_GRACE_MS) {
+      activityCandidateSince = 0;
+      return;
+    }
 
     if (level >= THINKING_ACTIVITY_LEVEL) {
       if (activityCandidateSince === 0) {
@@ -987,7 +1149,7 @@ function startLuriaAudioLevelLoop(asset) {
   luriaAudioRAF = requestAnimationFrame(tick);
 }
 
-function stopActiveAudio() {
+function stopActiveAudio(reason = "stopped") {
   if (!activeAudio) {
     stopLuriaAudioLevelLoop();
     return;
@@ -1003,10 +1165,51 @@ function stopActiveAudio() {
   cleanup?.();
   activeAudio = null;
   stopLuriaAudioLevelLoop();
-  resolve?.("stopped");
+  resolve?.(reason);
 }
 
-function playManagedAudio(key) {
+async function rewindAudioForReplay(element) {
+  if (!element) {
+    return;
+  }
+
+  try {
+    element.pause();
+  } catch (_) {}
+
+  // iOS Safari can occasionally keep a media element in its ended state
+  // for a moment on a second playback. Explicitly seek to the beginning
+  // and wait briefly for the seek to settle before calling play() again.
+  if (element.currentTime > 0.02 || element.ended) {
+    await new Promise((resolve) => {
+      let settled = false;
+
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        element.removeEventListener("seeked", done);
+        resolve();
+      };
+
+      element.addEventListener("seeked", done, { once: true });
+
+      try {
+        element.currentTime = 0;
+      } catch (_) {
+        done();
+        return;
+      }
+
+      setTimeout(done, 180);
+    });
+  } else {
+    try {
+      element.currentTime = 0;
+    } catch (_) {}
+  }
+}
+
+async function playManagedAudio(key) {
   const asset = audioAssets[key];
   const element = asset?.element;
 
@@ -1016,7 +1219,7 @@ function playManagedAudio(key) {
 
   stopActiveAudio();
 
-  element.currentTime = 0;
+  await rewindAudioForReplay(element);
   element.muted = false;
 
   return new Promise((resolve, reject) => {
@@ -1162,6 +1365,7 @@ function beginThinking() {
   clearTimer("thinking");
 
   activityCandidateSince = 0;
+  thinkingStartedAt = performance.now();
   setMode("Thinking");
 
   const generation = conversationGeneration;
@@ -1197,20 +1401,64 @@ function interruptThinkingWithUserSpeech(now) {
   setMode("Listening");
 }
 
+function interruptSpeakingWithUserSpeech(now) {
+  if (currentMode !== "Speaking") {
+    return;
+  }
+
+  clearTimer("post");
+
+  // Resolve the currently awaited long response as an interruption so its
+  // normal "wait, then Listening" path does not run afterward.
+  stopActiveAudio("interrupted");
+
+  userHasEverSpoken = true;
+  shortPromptEligible = false;
+  hasSpeechInCurrentTurn = true;
+  lastUserVoiceAt = now;
+  activityCandidateSince = 0;
+
+  updateLuriaVoice(0);
+  setMode("Listening");
+}
+
 async function playLongResponse() {
   const generation = conversationGeneration;
 
   clearTimer("thinking");
   activityCandidateSince = 0;
+  speakingStartedAt = performance.now();
   setMode("Speaking");
 
+  let playbackResult = "error";
+
   try {
-    await playManagedAudio("long");
+    playbackResult = await playManagedAudio("long");
   } catch (error) {
     console.error("[Luria] Long response audio failed:", error);
+
+    // If Safari refuses a replay, do not flash Speaking and then silently
+    // continue as though the answer played. Return cleanly to Listening.
+    if (
+      generation === conversationGeneration &&
+      experienceStarted &&
+      currentMode === "Speaking"
+    ) {
+      updateLuriaVoice(0);
+      hasSpeechInCurrentTurn = false;
+      lastUserVoiceAt = 0;
+      activityCandidateSince = 0;
+      setMode("Listening");
+    }
+
+    return;
   }
 
-  if (generation !== conversationGeneration || !experienceStarted) {
+  if (
+    playbackResult === "interrupted" ||
+    generation !== conversationGeneration ||
+    !experienceStarted
+  ) {
     return;
   }
 
@@ -1246,6 +1494,8 @@ function resetConversation() {
   hasSpeechInCurrentTurn = false;
   lastUserVoiceAt = 0;
   activityCandidateSince = 0;
+  thinkingStartedAt = 0;
+  speakingStartedAt = 0;
   smoothedMicLevel = 0;
 
   updateUserVoice(0);
