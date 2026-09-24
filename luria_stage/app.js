@@ -538,6 +538,16 @@ function createRive() {
     const params = {
       src: RIVE_FILE,
       canvas,
+      
+      // Presentation only: fill the responsive frame and crop from center
+      // instead of letterboxing Luria.
+      layout:
+        window.rive.Layout && window.rive.Fit && window.rive.Alignment
+          ? new window.rive.Layout({
+              fit: window.rive.Fit.Cover,
+              alignment: window.rive.Alignment.Center,
+            })
+          : undefined,
 
       // IMPORTANT: keep the exact working Rive setup from the
       // previous demo. "Final" is the shader-wrapper artboard.
