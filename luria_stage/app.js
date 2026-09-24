@@ -22,6 +22,7 @@
 //   Plays after the user's turn + thinking delay. Its live audio
 //   level drives Rive's luriaVoiceLevel property.
 // ------------------------------------------------------------
+const RIVE_RENDER_DPR = 1.25;
 
 const BUILD_ID = "LURIA-IMMERSIVE-v2-VOICE-GATE";
 
@@ -31,7 +32,7 @@ const LONG_AUDIO_FILE = "./assets/Luria-Long.mp3";
 const BACKGROUND_AUDIO_FILE = "./assets/bg-ambient.mp3";
 const BACKGROUND_VOLUME = 0.08;
 
-const ARTBOARD = "ThisIsLuria";
+const ARTBOARD = "Final";
 const STATE_MACHINE = "Luria State Machine";
 
 const STATE_PROPERTY = "state";
@@ -527,7 +528,7 @@ function createRive() {
           console.log(`[Luria] ${BUILD_ID} loaded`);
 
           // Keep the original working initialization order.
-          r.resizeDrawingSurfaceToCanvas();
+          r.resizeDrawingSurfaceToCanvas(RIVE_RENDER_DPR);
 
           try {
             // Explicitly play the state machine even though autoplay
@@ -1481,7 +1482,7 @@ window.addEventListener("focus", () => {
 window.addEventListener(
   "resize",
   () => {
-    r?.resizeDrawingSurfaceToCanvas();
+    r?.resizeDrawingSurfaceToCanvas(RIVE_RENDER_DPR);
     wakeRive();
   },
   { passive: true }
