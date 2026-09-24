@@ -3,70 +3,74 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#111113" />
-  <title>Luria State Test</title>
+  <meta name="theme-color" content="#0d0d10" />
+  <title>Luria</title>
   <link rel="stylesheet" href="./styles.css" />
-  <link rel="preload" href="https://unpkg.com/@rive-app/webgl2@2.42.1/rive.wasm" as="fetch" crossorigin="anonymous" data-next-head="">
-  <script type="text/javascript" integrity="sha384-girahbTbYZ9tT03PWWj0mEVgyxtZoyDF9KVZdL+R53PP5wCY0PiVUKq0jeRlMx9M" crossorigin="anonymous" async="" src="https://cdn.amplitude.com/libs/amplitude-7.2.1-min.gz.js"></script>
+  <link rel="preload" href="https://unpkg.com/@rive-app/webgl2@2.42.2/rive.wasm" as="fetch" crossorigin="anonymous" />
 </head>
 <body>
-  <main class="page">
-    <section class="phone-wrap" aria-label="Luria mobile prototype">
-      <div class="phone">
-        <canvas id="rive-canvas" width="390" height="746" aria-label="Luria Rive animation"></canvas>
-        <img class="shell-overlay" src="./assets/shell-overlay.svg" alt="" />
+  <main class="experience" aria-label="Luria voice experience">
+    <canvas id="rive-canvas" width="390" height="844" aria-label="Luria"></canvas>
 
-        <div id="loading" class="loading" aria-live="polite">
-          <div class="loader-ring" aria-hidden="true"></div>
-          <div class="loading-copy">
-            <strong>Loading Luria</strong>
-            <span>Preparing animation…</span>
+    <div id="loading" class="overlay loading-overlay" aria-live="polite">
+      <div class="loader-card">
+        <div class="loader-heading">
+          <span id="loader-percent">0%</span>
+          <div>
+            <strong id="loader-title">Loading Luria</strong>
+            <span id="loader-detail">Preparing the experience…</span>
+          </div>
+        </div>
+
+        <div class="progress-track" aria-hidden="true">
+          <div id="loader-bar" class="progress-bar"></div>
+        </div>
+
+        <div class="loader-steps" aria-label="Loading progress">
+          <div id="loader-step-luria" class="loader-step active">
+            <span class="step-mark"></span>
+            <span>Loading Luria</span>
+          </div>
+          <div id="loader-step-audio" class="loader-step">
+            <span class="step-mark"></span>
+            <span>Loading audio</span>
           </div>
         </div>
       </div>
-    </section>
+    </div>
 
-    <section class="tester">
-      <header class="tester-header">
-        <div>
-          <h1>Luria test</h1>
-          <p>State + voice response</p>
+    <div id="permission-gate" class="overlay permission-overlay hidden" aria-live="polite">
+      <div class="permission-card">
+        <div class="permission-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24" role="presentation">
+            <path d="M12 14.25a3.75 3.75 0 0 0 3.75-3.75V6a3.75 3.75 0 1 0-7.5 0v4.5A3.75 3.75 0 0 0 12 14.25Z" />
+            <path d="M5.75 10.5a6.25 6.25 0 0 0 12.5 0M12 16.75V21M8.75 21h6.5" />
+          </svg>
         </div>
-        <span id="rive-status" class="status-dot" title="Waiting for Rive"></span>
-      </header>
+        <h1>Meet Luria</h1>
+        <p>Luria listens and responds through your microphone. Sound is part of the experience.</p>
+        <button id="start-experience" class="primary-button" type="button">Enable microphone &amp; sound</button>
+        <p id="permission-status" class="permission-status">Make sure this tab is not muted.</p>
+      </div>
+    </div>
 
-      <div class="mode-switch" role="group" aria-label="Luria mode">
-        <button class="mode-button active" data-mode="Listening">User speaking</button>
-        <button class="mode-button" data-mode="Thinking">Thinking</button>
-        <button class="mode-button" data-mode="Speaking">Luria speaking</button>
+    <div id="experience-hud" class="experience-hud hidden">
+      <div class="session-indicator" aria-live="polite">
+        <span id="mic-dot" class="mic-dot"></span>
+        <span id="state-label">Listening</span>
       </div>
 
-      <section id="user-panel" class="voice-panel">
-        <div class="panel-row">
-          <span>User voice</span>
-          <output id="user-output">0.00</output>
-        </div>
-        <input id="user-level" type="range" min="0" max="3" step="0.01" value="0" />
-        <button id="user-mic" class="mic-button">Use microphone</button>
-      </section>
+      <button id="reset-demo" class="reset-button" type="button" aria-label="Reset Luria demo">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 11a8 8 0 1 0-2.34 5.66M20 11V5m0 6h-6" />
+        </svg>
+        <span>Reset</span>
+      </button>
+    </div>
 
-      <section id="thinking-panel" class="thinking-panel hidden">
-        <span class="thinking-dot"></span>
-        <span>Thinking state</span>
-      </section>
-
-      <section id="luria-panel" class="voice-panel hidden">
-        <div class="panel-row">
-          <span>Luria voice</span>
-          <output id="luria-output">0.00</output>
-        </div>
-        <input id="luria-level" type="range" min="0" max="3" step="0.01" value="0" />
-        <button id="luria-mic" class="mic-button">Use microphone</button>
-      </section>
-
-      <p id="mic-status" class="microcopy">Microphone is off.</p>
-    </section>
+    <p id="experience-status" class="sr-only" aria-live="polite"></p>
   </main>
+
   <script src="https://unpkg.com/@rive-app/webgl2@2.42.2"></script>
   <script src="./app.js"></script>
 </body>
