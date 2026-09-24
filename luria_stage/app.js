@@ -25,7 +25,7 @@
 const RIVE_RENDER_DPR = 1.25;
 const AUDIO_VERSION = Date.now();
 
-const BUILD_ID = "LURIA-IMMERSIVE-v2-VOICE-GATE";
+const BUILD_ID = "LURIA-IMMERSIVE-v2.27";
 
 const RIVE_FILE = "./assets/luria.riv?v=20260923-1";
 const SHORT_AUDIO_FILE = `./assets/Luria-Short.mp3?v=${AUDIO_VERSION}`;
@@ -426,14 +426,44 @@ async function loadAudioAssets() {
 
   await waitForAudioMetadata(backgroundAudio);
 
-  // Decode once for gapless Web Audio looping. This avoids the small restart
-  // seam iOS Safari can introduce with HTMLAudioElement.loop.
+  // Decode once for gapless Web Audio looping.
+  //
+  // IMPORTANT FOR iOS SAFARI:
+  // Do NOT call ensureAudioContext() here because it tries to resume the
+  // AudioContext before the user has tapped the permission/start button.
+  // Safari can leave that resume() promise pending, which makes the loader
+  // appear stuck at 99%.
+  //
+  // Creating a suspended AudioContext and decoding a local buffer is enough
+  // during preload. The context is resumed later from the user's tap.
   try {
-    await ensureAudioContext();
+    if (!audioContext) {
+      const AudioContextCtor =
+        window.AudioContext || window.webkitAudioContext;
+
+      if (!AudioContextCtor) {
+        throw new Error("Web Audio is not supported in this browser.");
+      }
+
+      audioContext = new AudioContextCtor();
+    }
+
     const arrayBuffer = await backgroundBlob.arrayBuffer();
-    backgroundBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+
+    backgroundBuffer = await Promise.race([
+      audioContext.decodeAudioData(arrayBuffer.slice(0)),
+      new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("Background audio decode timed out."));
+        }, 5000);
+      }),
+    ]);
   } catch (error) {
-    console.warn("[Luria] Could not decode background WAV for Web Audio loop; using HTMLAudio fallback.", error);
+    console.warn(
+      "[Luria] Could not decode background WAV for Web Audio loop; using HTMLAudio fallback.",
+      error
+    );
+
     backgroundBuffer = null;
   }
 
@@ -538,16 +568,13 @@ function createRive() {
     const params = {
       src: RIVE_FILE,
       canvas,
-      
-      // Presentation only: fill the responsive frame and crop from center
-      // instead of letterboxing Luria.
-      layout:
-        window.rive.Layout && window.rive.Fit && window.rive.Alignment
-          ? new window.rive.Layout({
-              fit: window.rive.Fit.Cover,
-              alignment: window.rive.Alignment.Center,
-            })
-          : undefined,
+
+      // Fill the responsive experience and crop from the center.
+      // Presentation only; all existing state/audio logic is unchanged.
+      layout: new window.rive.Layout({
+        fit: window.rive.Fit.Cover,
+        alignment: window.rive.Alignment.Center,
+      }),
 
       // IMPORTANT: keep the exact working Rive setup from the
       // previous demo. "Final" is the shader-wrapper artboard.
