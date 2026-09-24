@@ -43,10 +43,20 @@ const LURIA_VOICE_PROPERTY = "luriaVoiceLevel";
 // ------------------------------------------------------------
 // These are the main values to fine-tune later.
 
+// How long Luria waits for the user to begin speaking
+// before playing the one-time short nudge.
 const SHORT_PROMPT_DELAY_MS = 6000;
-const SILENCE_TO_THINK_MS = 6500;
+
+// Silence after USER finishes speaking before Luria starts Thinking.
+// Previously: 6500
+const SILENCE_TO_THINK_MS = 3000;
+
+// How long Luria stays in Thinking before answering.
 const THINKING_DURATION_MS = 7000;
-const POST_SPEECH_PAUSE_MS = 3500;
+
+// Pause after Luria finishes speaking before returning to Listening.
+// Previously: 3500
+const POST_SPEECH_PAUSE_MS = 1300;
 
 // Voice activity detection lives entirely in web JS. Rive only receives
 // the resulting state + voice level for visuals.
@@ -54,14 +64,23 @@ const POST_SPEECH_PAUSE_MS = 3500;
 // Listening is intentionally more sensitive than Thinking. While the
 // one-time short nudge is playing, use a stronger gate so Luria's own
 // speaker output is much less likely to be mistaken for the user.
+
 const LISTENING_ACTIVITY_LEVEL = 0.38;
 const LISTENING_ACTIVITY_HOLD_MS = 220;
 
-const THINKING_ACTIVITY_LEVEL = 0.46;
-const THINKING_ACTIVITY_HOLD_MS = 260;
+// During Thinking we require MUCH clearer/louder speech
+// before allowing the user to interrupt Luria.
+//
+// Previously: 0.46
+// +0.30 = 0.76
+const THINKING_ACTIVITY_LEVEL = 0.76;
+// Also require the sound to persist slightly longer,
+// so a bang/click/door/etc. doesn't interrupt Thinking.
+const THINKING_ACTIVITY_HOLD_MS = 350;
 
-const SHORT_NUDGE_ACTIVITY_LEVEL = 0.56;
-const SHORT_NUDGE_ACTIVITY_HOLD_MS = 260;
+// While the short Luria nudge is playing.
+const SHORT_NUDGE_ACTIVITY_LEVEL = 0.76;
+const SHORT_NUDGE_ACTIVITY_HOLD_MS = 350;
 
 // Very low residual room noise should not animate Luria's user-voice
 // visuals even though we continue analysing the microphone internally.
