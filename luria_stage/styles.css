@@ -263,6 +263,10 @@ button:focus-visible {
   display: none;
 }
 
+#reset-demo {
+  display: none;
+}
+
 .shell-overlay {
   position: absolute;
   inset: 0;

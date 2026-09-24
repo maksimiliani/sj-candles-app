@@ -31,7 +31,7 @@ const LONG_AUDIO_FILE = "./assets/Luria-Long.mp3";
 const BACKGROUND_AUDIO_FILE = "./assets/bg-ambient.mp3";
 const BACKGROUND_VOLUME = 0.08;
 
-const ARTBOARD = "Final";
+const ARTBOARD = "ThisIsLuria";
 const STATE_MACHINE = "Luria State Machine";
 
 const STATE_PROPERTY = "state";
